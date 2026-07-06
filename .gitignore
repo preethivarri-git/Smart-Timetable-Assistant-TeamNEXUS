@@ -1,0 +1,21 @@
+# Environment variables
+.env
+
+# Google credentials
+credentials/
+token.json
+token.pickle
+client_secret*.json
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Streamlit
+.streamlit/
+
+# OS files
+.DS_Store
+Thumbs.db
