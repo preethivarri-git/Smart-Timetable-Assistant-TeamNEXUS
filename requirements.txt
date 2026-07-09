@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 streamlit
 google-api-python-client
 google-auth
@@ -8,3 +9,15 @@ langchain
 langchain-openai
 langgraph
 openai
+=======
+streamlit
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+python-dotenv
+langchain
+langchain-openai
+langgraph
+openai
+>>>>>>> 88600d73ba8f5224150e3f04f22f0f3108005cff
