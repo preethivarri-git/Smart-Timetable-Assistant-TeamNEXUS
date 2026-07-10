@@ -2,7 +2,7 @@
 .env
 
 # Google credentials
-credentials/
+credentials.json
 token.json
 token.pickle
 client_secret*.json
