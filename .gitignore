@@ -6,7 +6,7 @@ credentials.json
 token.json
 token.pickle
 client_secret*.json
-
+class_schedule.json
 # Python
 __pycache__/
 *.pyc
