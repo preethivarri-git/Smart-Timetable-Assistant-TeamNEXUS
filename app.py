@@ -1,9 +1,9 @@
 import streamlit as st
 from datetime import datetime, timedelta
 from googleapiclient.discovery import build
-from auth import authenticate_google
-from calendar_service.google_calendar import create_event, list_events, format_event_summary
-from calendar_service.schedule_manager import (
+from backend.calendar_service.auth import authenticate_google
+from backend.calendar_service.google_calendar import create_event, list_events, format_event_summary
+from backend.calendar_service.schedule_manager import (
     load_schedule, save_schedule, add_class, delete_class, get_color_for_class
 )
 
