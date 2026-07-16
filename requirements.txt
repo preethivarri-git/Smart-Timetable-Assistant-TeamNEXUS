@@ -10,6 +10,4 @@ langchain-google-community
 langchain-openai
 langgraph
 openai
-
-
-
+google-generativeai

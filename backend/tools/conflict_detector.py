@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from backend.calendar_services.google_calendar import get_events_between
+from backend.calendar_service.google_calendar import get_events_between
 
 
 def check_conflicts(service, start_time, end_time):
