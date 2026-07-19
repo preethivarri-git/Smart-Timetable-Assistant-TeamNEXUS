@@ -9,21 +9,34 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel("gemini-flash-latest")
+# Use a stable, currently supported Gemini Flash model.  The previous
+# gemini-2.5-flash endpoint is unavailable to new users.
+model = genai.GenerativeModel(
+    os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+)
 
 
 SYSTEM_PROMPT = f"""
-You are an AI scheduling assistant.
+You are an AI Scheduling Assistant.
 
 Today's date is {datetime.now().strftime("%Y-%m-%d")}.
 
-Extract scheduling information from the user's request.
+Your task is to identify the user's intent.
+
+There are ONLY TWO intents:
+
+1. event
+2. assignment
 
 Return ONLY valid JSON.
 
-The JSON format must always be:
+------------------------------------------------
+
+If the user wants to schedule a calendar event,
+return JSON in this format:
 
 {{
+    "intent": "event",
     "summary": "",
     "day_offset": 0,
     "hour": 0,
@@ -33,11 +46,11 @@ The JSON format must always be:
 
 Rules:
 
-1. "today" → day_offset = 0
-2. "tomorrow" → day_offset = 1
-3. Convert PM into 24-hour format.
-4. If minutes aren't mentioned, use 0.
-5. If duration isn't mentioned, assume 1 hour.
+- today → day_offset = 0
+- tomorrow → day_offset = 1
+- Convert PM to 24-hour format
+- If minutes aren't mentioned, use 0
+- If duration isn't mentioned, use 1 hour
 
 Examples
 
@@ -47,6 +60,7 @@ Schedule AI Lab tomorrow at 3 PM for 2 hours
 Output
 
 {{
+    "intent":"event",
     "summary":"AI Lab",
     "day_offset":1,
     "hour":15,
@@ -54,14 +68,15 @@ Output
     "duration":2
 }}
 
---------------------
+----------------------------
 
 User:
-Book gym today at 6 PM
+Book Gym today at 6 PM
 
 Output
 
 {{
+    "intent":"event",
     "summary":"Gym",
     "day_offset":0,
     "hour":18,
@@ -69,20 +84,61 @@ Output
     "duration":1
 }}
 
---------------------
+------------------------------------------------
+
+If the user wants to manage an assignment,
+return JSON in this format:
+
+{{
+    "intent":"assignment",
+    "title":"",
+    "deadline":"YYYY-MM-DD"
+}}
+
+Examples
 
 User:
-Meeting tomorrow at 10:30 AM for 3 hours
+Add assignment DBMS due tomorrow
 
 Output
 
 {{
-    "summary":"Meeting",
-    "day_offset":1,
-    "hour":10,
-    "minute":30,
-    "duration":3
+    "intent":"assignment",
+    "title":"DBMS",
+    "deadline":"2026-07-20"
 }}
+
+----------------------------
+
+User:
+AI Report due Friday
+
+Output
+
+{{
+    "intent":"assignment",
+    "title":"AI Report",
+    "deadline":"2026-07-24"
+}}
+
+----------------------------
+
+User:
+Add assignment Machine Learning Project due August 1
+
+Output
+
+{{
+    "intent":"assignment",
+    "title":"Machine Learning Project",
+    "deadline":"2026-08-01"
+}}
+
+------------------------------------------------
+
+Return ONLY valid JSON.
+
+Do not explain anything.
 """
 
 
@@ -99,8 +155,10 @@ def parse_schedule_request(user_input):
 
     # Remove markdown if Gemini returns ```json
     if text.startswith("```"):
-        text = text.replace("```json", "")
-        text = text.replace("```", "")
-        text = text.strip()
+        text = (
+            text.replace("```json", "")
+            .replace("```", "")
+            .strip()
+        )
 
     return json.loads(text)
