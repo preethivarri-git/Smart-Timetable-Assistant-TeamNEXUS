@@ -3,13 +3,27 @@ import os
 from datetime import datetime
 
 from dotenv import load_dotenv
-import google.generativeai as genai
+
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+def _get_model():
+    """Lazily configure and return the Gemini model. Raises informative error if library missing or key not set."""
+    if genai is None:
+        raise RuntimeError(
+            "google.generativeai is not installed. Please install the official library: pip install google-generative-ai"
+        )
 
-model = genai.GenerativeModel("gemini-flash-latest")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY environment variable is not set")
+
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-flash-latest")
 
 
 SYSTEM_PROMPT = f"""
