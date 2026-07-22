@@ -3,41 +3,62 @@ from datetime import datetime, timedelta
 from backend.agent.nlp_parser import parse_schedule_request
 from backend.calendar_service.auth import get_calendar_service
 from backend.calendar_service.google_calendar import create_event
-from backend.tools.conflict_detector import check_conflicts
+from backend.tools.assignment_tracker import AssignmentTracker
 from backend.tools.availability import (
     find_free_slots,
     print_free_slots,
 )
+from backend.tools.conflict_detector import check_conflicts
 from backend.tools.query_handler import QueryHandler
 
 
 def schedule(user_input):
     """
-    Main AI Scheduling Agent.
-
-    Handles:
-    - Create Event
-    - Conflict Detection
-    - Free Time Queries
-    - Schedule Queries
+    Main AI Scheduling Agent
     """
 
     try:
 
         service = get_calendar_service()
         query = QueryHandler(service)
+        tracker = AssignmentTracker()
 
         command = user_input.lower().strip()
 
-        # ==================================================
-        # FREE TIME
-        # ==================================================
+        # ===================================================
+        # Assignment Commands
+        # ===================================================
 
-        if (
-            "free time" in command
-            or "free slot" in command
-            or "availability" in command
-        ):
+        if command == "show assignments":
+
+            tracker.show_assignments()
+            return
+
+        elif command.startswith("mark assignment"):
+
+            try:
+                assignment_id = int(command.split()[2])
+                tracker.mark_completed(assignment_id)
+            except Exception:
+                print("\nUsage: mark assignment <id>\n")
+
+            return
+
+        elif command.startswith("remove assignment"):
+
+            try:
+                assignment_id = int(command.split()[2])
+                tracker.remove_assignment(assignment_id)
+            except Exception:
+                print("\nUsage: remove assignment <id>\n")
+
+            return
+
+        # ===================================================
+        # Free Time
+        # ===================================================
+
+        elif "free time" in command:
 
             day = datetime.now()
 
@@ -52,91 +73,57 @@ def schedule(user_input):
             print_free_slots(slots)
             return
 
-        # ==================================================
-        # SHOW SCHEDULE
-        # ==================================================
+        # ===================================================
+        # Schedule Queries
+        # ===================================================
 
-        elif (
-            "schedule today" in command
-            or "today schedule" in command
-        ):
+        elif "schedule today" in command:
 
             query.show_schedule(0)
             return
 
-        elif (
-            "schedule tomorrow" in command
-            or "tomorrow schedule" in command
-        ):
+        elif "schedule tomorrow" in command:
 
             query.show_schedule(1)
             return
 
-        # ==================================================
-        # NEXT EVENT
-        # ==================================================
-
-        elif (
-            "next meeting" in command
-            or "next event" in command
-        ):
+        elif "next meeting" in command or "next event" in command:
 
             query.next_event()
             return
 
-        # ==================================================
-        # EVENTS AFTER TIME
-        # ==================================================
-
-        elif "after 5" in command:
-
-            query.events_after(17)
-            return
-
-        elif "after 6" in command:
-
-            query.events_after(18)
-            return
-
-        # ==================================================
-        # BUSY HOURS
-        # ==================================================
-
-        elif "busy" in command:
-
-            offset = 0
-
-            if "tomorrow" in command:
-                offset = 1
-
-            query.busy_hours(offset)
-            return
-
-        # ==================================================
-        # CHECK EVENTS
-        # ==================================================
-
-        elif (
-            "anything tomorrow" in command
-            or "do i have anything tomorrow" in command
-        ):
+        elif "anything tomorrow" in command:
 
             query.has_events(1)
             return
 
-        elif (
-            "anything today" in command
-            or "do i have anything today" in command
-        ):
+        elif "busy tomorrow" in command:
 
-            query.has_events(0)
+            query.busy_hours(1)
             return
 
-        # ==================================================
-        # CREATE EVENT
-        # ==================================================
+        # ===================================================
+        # NLP
+        # ===================================================
 
         data = parse_schedule_request(user_input)
+
+        # ===================================================
+        # Assignment Intent
+        # ===================================================
+
+        if data["intent"] == "assignment":
+
+            tracker.add_assignment(
+                data["title"],
+                data["deadline"]
+            )
+
+            return
+
+        # ===================================================
+        # Event Intent
+        # ===================================================
 
         start = datetime.now() + timedelta(
             days=data["day_offset"]
@@ -159,50 +146,23 @@ def schedule(user_input):
             end,
         )
 
-        # ==================================================
-        # CONFLICT FOUND
-        # ==================================================
-
         if result["conflict"]:
 
             print("\n⚠ Conflict Detected!\n")
 
             for event in result["events"]:
 
-                title = event.get(
-                    "summary",
-                    "Untitled Event"
-                )
-
-                event_start = event["start"].get(
-                    "dateTime",
-                    event["start"].get("date")
-                )
-
-                event_end = event["end"].get(
-                    "dateTime",
-                    event["end"].get("date")
-                )
-
-                print(title)
                 print(
-                    f"{event_start}  -->  {event_end}\n"
+                    f"- {event.get('summary','Untitled Event')}"
                 )
 
-            print("Suggested Time")
+            print("\nSuggested Time")
 
-            print(
-                f"{result['suggested_start']}"
-            )
-
-            print("to")
-
-            print(
-                f"{result['suggested_end']}"
-            )
+            print(result["suggested_start"])
+            print(result["suggested_end"])
 
             choice = input(
-                "\nSchedule at suggested time instead? (y/n): "
+                "\nSchedule at suggested time? (y/n): "
             )
 
             if choice.lower() == "y":
@@ -220,15 +180,9 @@ def schedule(user_input):
 
             else:
 
-                print(
-                    "\nEvent Cancelled.\n"
-                )
+                print("\nEvent Cancelled.\n")
 
             return
-
-        # ==================================================
-        # CREATE EVENT
-        # ==================================================
 
         create_event(
             service,
@@ -237,9 +191,7 @@ def schedule(user_input):
             end,
         )
 
-        print(
-            "\n✅ Event Created Successfully!\n"
-        )
+        print("\n✅ Event Created Successfully!\n")
 
     except Exception as e:
 
