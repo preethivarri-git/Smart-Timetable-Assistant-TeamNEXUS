@@ -18,7 +18,7 @@ def _get_model():
             "google.generativeai is not installed. Please install the official library: pip install google-generative-ai"
         )
 
-api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY environment variable is not set")
 
