@@ -30,28 +30,23 @@ def schedule(user_input):
         # ===================================================
 
         if command == "show assignments":
-
             tracker.show_assignments()
             return
 
         elif command.startswith("mark assignment"):
-
             try:
                 assignment_id = int(command.split()[2])
                 tracker.mark_completed(assignment_id)
             except Exception:
                 print("\nUsage: mark assignment <id>\n")
-
             return
 
         elif command.startswith("remove assignment"):
-
             try:
                 assignment_id = int(command.split()[2])
                 tracker.remove_assignment(assignment_id)
             except Exception:
                 print("\nUsage: remove assignment <id>\n")
-
             return
 
         # ===================================================
@@ -59,17 +54,10 @@ def schedule(user_input):
         # ===================================================
 
         elif "free time" in command:
-
             day = datetime.now()
-
             if "tomorrow" in command:
                 day += timedelta(days=1)
-
-            slots = find_free_slots(
-                service,
-                day
-            )
-
+            slots = find_free_slots(service, day)
             print_free_slots(slots)
             return
 
@@ -78,27 +66,22 @@ def schedule(user_input):
         # ===================================================
 
         elif "schedule today" in command:
-
             query.show_schedule(0)
             return
 
         elif "schedule tomorrow" in command:
-
             query.show_schedule(1)
             return
 
         elif "next meeting" in command or "next event" in command:
-
             query.next_event()
             return
 
         elif "anything tomorrow" in command:
-
             query.has_events(1)
             return
 
         elif "busy tomorrow" in command:
-
             query.busy_hours(1)
             return
 
@@ -113,87 +96,40 @@ def schedule(user_input):
         # ===================================================
 
         if data["intent"] == "assignment":
-
-            tracker.add_assignment(
-                data["title"],
-                data["deadline"]
-            )
-
+            tracker.add_assignment(data["title"], data["deadline"])
             return
 
         # ===================================================
         # Event Intent
         # ===================================================
 
-        start = datetime.now() + timedelta(
-            days=data["day_offset"]
-        )
+        start = datetime.now() + timedelta(days=data["day_offset"])
+        start = start.replace(hour=data["hour"], minute=data["minute"], second=0, microsecond=0)
+        end = start + timedelta(hours=data["duration"])
 
-        start = start.replace(
-            hour=data["hour"],
-            minute=data["minute"],
-            second=0,
-            microsecond=0,
-        )
-
-        end = start + timedelta(
-            hours=data["duration"]
-        )
-
-        result = check_conflicts(
-            service,
-            start,
-            end,
-        )
+        result = check_conflicts(service, start, end)
 
         if result["conflict"]:
+            # No console input() here — hand a structured conflict payload
+            # back to the caller (chat.py) so it can render Yes/No buttons.
+            conflicting_titles = [e.get("summary", "Untitled Event") for e in result["events"]]
+            return {
+                "status": "conflict",
+                "summary": data["summary"],
+                "conflicting_events": conflicting_titles,
+                "suggested_start": result["suggested_start"],
+                "suggested_end": result["suggested_end"],
+            }
 
-            print("\n⚠ Conflict Detected!\n")
-
-            for event in result["events"]:
-
-                print(
-                    f"- {event.get('summary','Untitled Event')}"
-                )
-
-            print("\nSuggested Time")
-
-            print(result["suggested_start"])
-            print(result["suggested_end"])
-
-            choice = input(
-                "\nSchedule at suggested time? (y/n): "
-            )
-
-            if choice.lower() == "y":
-
-                create_event(
-                    service,
-                    data["summary"],
-                    result["suggested_start"],
-                    result["suggested_end"],
-                )
-
-                print(
-                    "\n✅ Event Created Successfully!\n"
-                )
-
-            else:
-
-                print("\nEvent Cancelled.\n")
-
-            return
-
-        create_event(
-            service,
-            data["summary"],
-            start,
-            end,
-        )
-
-        print("\n✅ Event Created Successfully!\n")
+        create_event(service, data["summary"], start, end)
+        return f"✅ '{data['summary']}' scheduled for {start.strftime('%A %d %b, %I:%M %p')}."
 
     except Exception as e:
+        return f"Scheduler Error: {e}"
 
-        print("\nScheduler Error:\n")
-        print(e)
+
+def confirm_conflict_schedule(summary, suggested_start, suggested_end):
+    """Called from chat.py when the user clicks 'Yes' on a conflict prompt."""
+    service = get_calendar_service()
+    create_event(service, summary, suggested_start, suggested_end)
+    return f"✅ '{summary}' scheduled for {suggested_start.strftime('%A %d %b, %I:%M %p')} (moved to avoid conflict)."
