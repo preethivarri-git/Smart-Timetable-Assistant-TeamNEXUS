@@ -7,17 +7,21 @@ from backend.agent.scheduler_agent import schedule
 from backend.calendar_service.auth import authenticate_google
 from backend.calendar_service.google_calendar import create_event, list_events
 from backend.calendar_service.schedule_manager import load_schedule
+from backend.database.storage import init_db
 from backend.tools.assignment_tracker import AssignmentTracker
 from components.analytics import render_analytics
 from components.calendar import render_timetable
 from components.cards import event_list, render_topbar
 from components.chat import render_agent
 from components.hero import render_hero
+from components.login import require_login
 from components.sidebar import render_sidebar
 from components.styles import inject_styles
 
 
 st.set_page_config(page_title="Smart Scheduler", page_icon="S", layout="wide", initial_sidebar_state="expanded")
+init_db()
+require_login()
 inject_styles()
 
 if "service" not in st.session_state:
@@ -36,7 +40,7 @@ def calendar_events():
 
 def connect_calendar():
     try:
-        credentials = authenticate_google()
+        credentials = authenticate_google(st.session_state.user_id)
         st.session_state.service = build("calendar", "v3", credentials=credentials)
         st.success("Google Calendar connected.")
     except Exception as error:
@@ -48,7 +52,7 @@ if connect_clicked:
     connect_calendar()
 render_topbar()
 
-tracker = AssignmentTracker()
+tracker = AssignmentTracker(st.session_state.user_id)
 assignments = tracker.load_assignments()
 events = calendar_events()
 due = tracker.check_due_assignments()
@@ -116,7 +120,7 @@ elif page == "Assignments":
 elif page == "Analytics":
     st.markdown("<div class='eyebrow'>Insights</div><h1>Planning analytics</h1>", unsafe_allow_html=True)
     open_assignments = len([item for item in assignments if not item["completed"]])
-    render_analytics(len(events), len(load_schedule()), open_assignments)
+    render_analytics(len(events), len(load_schedule(st.session_state.user_id)), open_assignments)
 
 else:  # Settings
     st.markdown(

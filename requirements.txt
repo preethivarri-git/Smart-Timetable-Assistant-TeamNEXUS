@@ -11,3 +11,5 @@ langchain-openai
 langgraph
 openai
 google-generativeai
+sqlalchemy
+bcrypt

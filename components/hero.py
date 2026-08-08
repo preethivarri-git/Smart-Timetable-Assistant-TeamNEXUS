@@ -4,8 +4,7 @@ import streamlit as st
 
 
 def render_hero(name=None, semester="Semester 5", course="Computer Science"):
-    # TODO: once login is implemented, pull name from st.session_state.user_name
-    name = name or "Jagadeesh"
+    name = name or st.session_state.get("username", "there")
     today = datetime.now().strftime("%A, %d %B")
     st.markdown(
         f"""

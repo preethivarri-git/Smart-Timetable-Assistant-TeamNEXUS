@@ -5,8 +5,7 @@ import streamlit as st
 
 def render_topbar():
     date = datetime.now().strftime("%A, %d %B")
-    # TODO: once login is implemented, pull name from st.session_state.user_name
-    name = st.session_state.get("user_name", "Jagadeesh")
+    name = st.session_state.get("username", "there")
 
     left, right = st.columns([3, 2])
     with left:

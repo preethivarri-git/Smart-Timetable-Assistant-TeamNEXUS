@@ -1,5 +1,7 @@
 import streamlit as st
 
+from components.login import logout
+
 
 PAGES = [
     ("Home", "🏠"),
@@ -46,6 +48,8 @@ def render_sidebar():
 
         st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
         st.divider()
-        st.button("Logout", use_container_width=True, key="logout_btn")
+        st.caption(f"Logged in as **{st.session_state.get('username', '')}**")
+        if st.button("Logout", use_container_width=True, key="logout_btn"):
+            logout()
 
     return page, connect_clicked

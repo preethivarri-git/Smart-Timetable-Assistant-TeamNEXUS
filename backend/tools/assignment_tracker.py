@@ -1,35 +1,44 @@
-import json
-from datetime import datetime, timedelta
-from pathlib import Path
+"""
+backend/tools/assignment_tracker.py
 
-DATABASE_PATH = Path(__file__).resolve().parents[1] / "database" / "assignments.json"
+DB-backed replacement for the old shared assignments.json version. Every
+assignment is scoped to a single user via storage.py's Assignment table,
+so one user's assignments never leak into another user's view.
+
+AssignmentTracker takes user_id once, at construction time, so every other
+method signature below is unchanged from the old JSON-based version --
+call sites only need to change `AssignmentTracker()` to `AssignmentTracker(user_id)`.
+"""
+
+from datetime import datetime
+
+from backend.database import storage
 
 
 class AssignmentTracker:
 
-    def __init__(self, file_path=None):
-        self.file_path = Path(file_path) if file_path else DATABASE_PATH
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if not self.file_path.exists() or not self.file_path.read_text(encoding="utf-8").strip():
-            with self.file_path.open("w", encoding="utf-8") as f:
-                json.dump([], f, indent=4)
+    def __init__(self, user_id):
+        if user_id is None:
+            raise ValueError("AssignmentTracker requires a user_id")
+        self.user_id = user_id
 
     # -----------------------------------------------------
     # Internal Helpers
     # -----------------------------------------------------
 
+    def _to_dict(self, row):
+        """Translate an Assignment ORM row into the old JSON-style dict shape."""
+        return {
+            "id": row.id,
+            "title": row.title,
+            "deadline": row.due_date.strftime("%Y-%m-%d") if row.due_date else "",
+            "completed": row.status == "done",
+        }
+
     def load_assignments(self):
-        """Load assignments from JSON."""
-
-        with self.file_path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-
-    def save_assignments(self, assignments):
-        """Save assignments to JSON."""
-
-        with self.file_path.open("w", encoding="utf-8") as f:
-            json.dump(assignments, f, indent=4)
+        """Load this user's assignments."""
+        rows = storage.get_assignments(self.user_id)
+        return [self._to_dict(r) for r in rows]
 
     # -----------------------------------------------------
     # CRUD Operations
@@ -37,34 +46,20 @@ class AssignmentTracker:
 
     def add_assignment(self, title, deadline):
         """
-        Add a new assignment.
+        Add a new assignment for this user.
 
         deadline format:
         YYYY-MM-DD
         """
-
-        assignments = self.load_assignments()
-
-        assignment = {
-            "id": max((item["id"] for item in assignments), default=0) + 1,
-            "title": title,
-            "deadline": deadline,
-            "completed": False,
-            "created_at": datetime.now().strftime(
-                "%Y-%m-%d %H:%M"
-            )
-        }
-
-        assignments.append(assignment)
-
-        self.save_assignments(assignments)
-
+        due_date = datetime.strptime(deadline, "%Y-%m-%d")
+        new_id = storage.add_assignment(self.user_id, title, None, due_date)
         print("\nAssignment added successfully.\n")
+        return new_id
 
     # -----------------------------------------------------
 
     def show_assignments(self):
-        """Display all assignments."""
+        """Display all of this user's assignments."""
 
         assignments = self.load_assignments()
 
@@ -104,41 +99,23 @@ class AssignmentTracker:
     # -----------------------------------------------------
 
     def remove_assignment(self, assignment_id):
-        """Delete assignment using ID."""
+        """Delete assignment using ID. Scoped to this user."""
 
-        assignments = self.load_assignments()
+        ok = storage.delete_assignment(assignment_id, self.user_id)
 
-        updated = [
-            a
-            for a in assignments
-            if a["id"] != assignment_id
-        ]
-
-        self.save_assignments(updated)
-
-        print("\nAssignment Removed.\n")
+        if ok:
+            print("\nAssignment Removed.\n")
+        else:
+            print("\nAssignment Not Found.\n")
 
     # -----------------------------------------------------
 
     def mark_completed(self, assignment_id):
-        """Mark assignment as completed."""
+        """Mark assignment as completed. Scoped to this user."""
 
-        assignments = self.load_assignments()
+        ok = storage.update_assignment_status(assignment_id, self.user_id, "done")
 
-        found = False
-
-        for assignment in assignments:
-
-            if assignment["id"] == assignment_id:
-
-                assignment["completed"] = True
-                found = True
-                break
-
-        if found:
-
-            self.save_assignments(assignments)
-
+        if ok:
             print(
                 "\nAssignment Marked Completed.\n"
             )
@@ -152,7 +129,7 @@ class AssignmentTracker:
     # -----------------------------------------------------
 
     def pending_assignments(self):
-        """Show only pending assignments."""
+        """Show only this user's pending assignments."""
 
         assignments = self.load_assignments()
 
@@ -184,7 +161,7 @@ class AssignmentTracker:
     # -----------------------------------------------------
 
     def completed_assignments(self):
-        """Show completed assignments."""
+        """Show this user's completed assignments."""
 
         assignments = self.load_assignments()
 
@@ -217,7 +194,7 @@ class AssignmentTracker:
 
     def check_due_assignments(self):
         """
-        Returns assignments due within
+        Returns this user's assignments due within
         the next two days.
         """
 
@@ -230,6 +207,9 @@ class AssignmentTracker:
         for assignment in assignments:
 
             if assignment["completed"]:
+                continue
+
+            if not assignment["deadline"]:
                 continue
 
             deadline = datetime.strptime(

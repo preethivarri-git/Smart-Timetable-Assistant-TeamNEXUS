@@ -10,6 +10,7 @@ SUGGESTIONS = ["Schedule DBMS Lecture", "Move Operating Systems Lab", "Find Free
 
 
 def render_agent(schedule):
+    user_id = st.session_state.user_id
     st.markdown(
         """
         <div class='agent-shell'>
@@ -46,7 +47,7 @@ def render_agent(schedule):
                 yes_col, no_col = st.columns(2)
                 if yes_col.button("Yes, use suggested time", key="conflict_yes", use_container_width=True):
                     response = confirm_conflict_schedule(
-                        conflict["summary"], conflict["suggested_start"], conflict["suggested_end"]
+                        conflict["summary"], conflict["suggested_start"], conflict["suggested_end"], user_id
                     )
                     st.session_state.chat_messages.append({"role": "assistant", "content": response})
                     st.session_state.pending_conflict = None
@@ -75,7 +76,7 @@ def render_agent(schedule):
                 output = io.StringIO()
                 try:
                     with redirect_stdout(output):
-                        result = schedule(prompt)
+                        result = schedule(prompt, user_id)
                 except Exception as error:
                     result = f"I couldn't complete that request: {error}"
 

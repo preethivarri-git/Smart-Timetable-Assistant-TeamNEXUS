@@ -1,8 +1,22 @@
-import json
-import os
+"""
+backend/calendar_service/schedule_manager.py
 
-SCHEDULE_FILE = "class_schedule.json"
-TEMPLATES_FILE = "semester_templates.json"
+DB-backed replacement for the old class_schedule.json / semester_templates.json
+version. All functions are scoped by user_id and talk to storage.py instead of
+flat files.
+
+IMPORTANT: callers (e.g. components/calendar.py) still work with the *old*
+JSON-shaped dicts -- keys like "name", "day", "room", "type", "id" -- rather
+than storage.py's column names ("course_name", "day_of_week", "location",
+"class_type"). This module is a translation layer: it fetches from the DB
+using the new column names, then hands back dicts shaped like the old ones,
+so rendering code elsewhere doesn't also need to be rewritten.
+
+Every public function now takes user_id as its first argument. Call sites
+in calendar.py and app.py need to be updated to pass st.session_state.user_id.
+"""
+
+from backend.database import storage
 
 CLASS_TYPES = ["Lecture", "Lab", "Tutorial"]
 
@@ -14,104 +28,100 @@ TYPE_COLORS = {
 }
 
 
-def load_schedule():
-    if not os.path.exists(SCHEDULE_FILE):
-        return []
-    with open(SCHEDULE_FILE, "r") as f:
-        schedule = json.load(f)
-    return [_migrate_entry(c) for c in schedule]
+def _to_dict(row):
+    """Translate a ClassSchedule ORM row into the old JSON-style dict shape."""
+    return {
+        "id": row.id,
+        "name": row.course_name,
+        "day": row.day_of_week,
+        "start_time": row.start_time,
+        "end_time": row.end_time,
+        "room": row.location or "",
+        "instructor": row.instructor or "",
+        "type": row.class_type or "Lecture",
+        "semester": row.semester,
+    }
 
 
-def _migrate_entry(entry):
-    """Backfills type/semester on classes saved before this update."""
-    entry.setdefault("type", "Lecture")
-    entry.setdefault("semester", "Unassigned")
-    return entry
+def load_schedule(user_id):
+    """All classes for this user, across every semester."""
+    rows = storage.get_class_schedules(user_id)
+    return [_to_dict(r) for r in rows]
 
 
-def save_schedule(schedule):
-    with open(SCHEDULE_FILE, "w") as f:
-        json.dump(schedule, f, indent=2)
-
-
-def add_class(name, day, start_time, end_time, room="", instructor="", class_type="Lecture", semester="Unassigned"):
+def add_class(user_id, name, day, start_time, end_time, room="", instructor="",
+              class_type="Lecture", semester="Unassigned"):
     if class_type not in CLASS_TYPES:
         class_type = "Lecture"
-    schedule = load_schedule()
-    class_entry = {
-        "id": (max((c["id"] for c in schedule), default=0)) + 1,
-        "name": name,
-        "day": day,
-        "start_time": start_time,
-        "end_time": end_time,
-        "room": room,
-        "instructor": instructor,
-        "type": class_type,
-        "semester": semester,
-    }
-    schedule.append(class_entry)
-    save_schedule(schedule)
-    return class_entry
+    new_id = storage.add_class_schedule(
+        user_id,
+        course_name=name,
+        day_of_week=day,
+        start_time=str(start_time),
+        end_time=str(end_time),
+        course_code="",
+        class_type=class_type,
+        location=room,
+        instructor=instructor,
+        semester=semester,
+    )
+    return new_id
 
 
-def delete_class(class_id):
-    schedule = load_schedule()
-    schedule = [c for c in schedule if c["id"] != class_id]
-    save_schedule(schedule)
+def delete_class(user_id, class_id):
+    """Deletes a class. Scoped to user_id -- one user can't delete another's class."""
+    return storage.delete_class_schedule(class_id, user_id)
 
 
 def get_color_for_class(class_entry):
-    """Color is now based on class type (Lecture/Lab/Tutorial), per the design brief."""
+    """Color is based on class type (Lecture/Lab/Tutorial), per the design brief."""
     return TYPE_COLORS.get(class_entry.get("type", "Lecture"), TYPE_COLORS["Lecture"])
 
 
-def classes_for_semester(semester):
-    return [c for c in load_schedule() if c.get("semester") == semester]
+def classes_for_semester(user_id, semester):
+    rows = storage.get_class_schedules(user_id, semester=semester)
+    return [_to_dict(r) for r in rows]
 
 
-def list_semesters():
-    semesters = sorted({c.get("semester", "Unassigned") for c in load_schedule()})
-    return semesters or ["Unassigned"]
+def list_semesters(user_id):
+    return storage.list_semesters(user_id)
 
 
 # ---------- Semester templates (Week 5-6 checkpoint 1) ----------
 
-def load_templates():
-    if not os.path.exists(TEMPLATES_FILE):
-        return {}
-    with open(TEMPLATES_FILE, "r") as f:
-        return json.load(f)
-
-
-def save_templates(templates):
-    with open(TEMPLATES_FILE, "w") as f:
-        json.dump(templates, f, indent=2)
-
-
-def save_current_as_template(template_name, semester):
+def save_current_as_template(user_id, template_name, semester):
     """Snapshot a semester's current classes as a reusable template."""
-    templates = load_templates()
-    classes = classes_for_semester(semester)
-    templates[template_name] = [
-        {k: v for k, v in c.items() if k != "id"} for c in classes
-    ]
-    save_templates(templates)
+    storage.save_semester_template(user_id, template_name, semester)
 
 
-def apply_template(template_name, target_semester):
-    """Populate a semester's timetable from a saved template."""
-    templates = load_templates()
-    if template_name not in templates:
+def load_templates(user_id):
+    """
+    Returns {template_name: [class_dict, ...]} to match the old JSON shape
+    that calendar.py expects (it calls .keys() on the result).
+    """
+    templates = storage.get_semester_templates(user_id)
+    result = {}
+    for t in templates:
+        result[t["name"]] = [
+            {
+                "name": c.get("course_name"),
+                "day": c.get("day_of_week"),
+                "start_time": c.get("start_time"),
+                "end_time": c.get("end_time"),
+                "room": c.get("location") or "",
+                "instructor": c.get("instructor") or "",
+                "type": c.get("class_type") or "Lecture",
+            }
+            for c in t["classes"]
+        ]
+    return result
+
+
+def apply_template(user_id, template_name, target_semester):
+    """Populate a semester's timetable from a saved template. Returns the new class dicts."""
+    new_ids = storage.apply_semester_template(user_id, template_name, target_semester)
+    if not new_ids:
         return []
-    schedule = load_schedule()
-    next_id = max((c["id"] for c in schedule), default=0) + 1
-    added = []
-    for entry in templates[template_name]:
-        new_entry = dict(entry)
-        new_entry["id"] = next_id
-        new_entry["semester"] = target_semester
-        schedule.append(new_entry)
-        added.append(new_entry)
-        next_id += 1
-    save_schedule(schedule)
+    rows = storage.get_class_schedules(user_id, semester=target_semester)
+    added = [_to_dict(r) for r in rows if r.id in new_ids]
     return added

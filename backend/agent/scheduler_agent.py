@@ -12,16 +12,16 @@ from backend.tools.conflict_detector import check_conflicts
 from backend.tools.query_handler import QueryHandler
 
 
-def schedule(user_input):
+def schedule(user_input, user_id):
     """
     Main AI Scheduling Agent
     """
 
     try:
 
-        service = get_calendar_service()
+        service = get_calendar_service(user_id)
         query = QueryHandler(service)
-        tracker = AssignmentTracker()
+        tracker = AssignmentTracker(user_id)
 
         command = user_input.lower().strip()
 
@@ -128,8 +128,8 @@ def schedule(user_input):
         return f"Scheduler Error: {e}"
 
 
-def confirm_conflict_schedule(summary, suggested_start, suggested_end):
+def confirm_conflict_schedule(summary, suggested_start, suggested_end, user_id):
     """Called from chat.py when the user clicks 'Yes' on a conflict prompt."""
-    service = get_calendar_service()
+    service = get_calendar_service(user_id)
     create_event(service, summary, suggested_start, suggested_end)
     return f"✅ '{summary}' scheduled for {suggested_start.strftime('%A %d %b, %I:%M %p')} (moved to avoid conflict)."
