@@ -381,6 +381,18 @@ def update_assignment_status(assignment_id, user_id, status):
         return False
 
 
+def update_assignment_priority(assignment_id, user_id, priority):
+    """Scoped to user_id so one user can't change another user's assignment."""
+    with get_session() as db:
+        a = db.query(Assignment).filter(
+            Assignment.id == assignment_id, Assignment.user_id == user_id
+        ).first()
+        if a:
+            a.priority = priority
+            return True
+        return False
+
+
 def delete_assignment(assignment_id, user_id):
     with get_session() as db:
         a = db.query(Assignment).filter(

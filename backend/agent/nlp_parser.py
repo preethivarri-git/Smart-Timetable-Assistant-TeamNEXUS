@@ -35,10 +35,11 @@ Today's date is {datetime.now().strftime("%Y-%m-%d")}.
 
 Your task is to identify the user's intent.
 
-There are ONLY TWO intents:
+There are ONLY THREE intents:
 
 1. event
 2. assignment
+3. move_class
 
 Return ONLY valid JSON.
 
@@ -144,6 +145,79 @@ Output
     "intent":"assignment",
     "title":"Machine Learning Project",
     "deadline":"2026-08-01"
+}}
+
+------------------------------------------------
+
+If the user wants to move, reschedule, or shift an
+EXISTING recurring class to a different day and/or time
+(e.g. "move my DBMS lecture to Wednesday", "shift OS lab
+to 4pm", "reschedule Operating Systems Lab to Friday 2pm"),
+return JSON in this format:
+
+{{
+    "intent": "move_class",
+    "class_query": "",
+    "new_day": "",
+    "new_start_time": null,
+    "new_end_time": null
+}}
+
+Rules:
+
+- class_query: the class name/subject as the user referred to it
+  (do not guess a full official name — use their words)
+- new_day: one of Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
+  (use null if no new day was mentioned)
+- new_start_time / new_end_time: 24-hour "HH:MM" strings if a new time
+  was mentioned, otherwise null (null means keep the class's existing time)
+- This intent is ONLY for existing recurring classes being moved.
+  A brand new one-time booking (e.g. "schedule a meeting tomorrow at 5pm")
+  is "event", not "move_class".
+
+Examples
+
+User:
+Move my DBMS lecture to Wednesday
+
+Output
+
+{{
+    "intent": "move_class",
+    "class_query": "DBMS",
+    "new_day": "Wednesday",
+    "new_start_time": null,
+    "new_end_time": null
+}}
+
+----------------------------
+
+User:
+Shift Operating Systems Lab to 4 PM
+
+Output
+
+{{
+    "intent": "move_class",
+    "class_query": "Operating Systems Lab",
+    "new_day": null,
+    "new_start_time": "16:00",
+    "new_end_time": null
+}}
+
+----------------------------
+
+User:
+Reschedule AI Lecture to Friday 2 PM to 3 PM
+
+Output
+
+{{
+    "intent": "move_class",
+    "class_query": "AI Lecture",
+    "new_day": "Friday",
+    "new_start_time": "14:00",
+    "new_end_time": "15:00"
 }}
 
 ------------------------------------------------

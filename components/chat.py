@@ -6,7 +6,7 @@ import streamlit as st
 from backend.agent.scheduler_agent import confirm_conflict_schedule
 
 
-SUGGESTIONS = ["Schedule DBMS Lecture", "Move Operating Systems Lab", "Find Free Time Tomorrow", "Create Study Schedule"]
+SUGGESTIONS = ["Schedule a Class", "Move a Class", "Find Free Time Tomorrow", "Create Study Schedule"]
 
 
 def render_agent(schedule):
@@ -57,13 +57,33 @@ def render_agent(schedule):
                     st.session_state.pending_conflict = None
                     st.rerun()
 
+    def _fill_draft(text):
+        st.session_state.chat_draft = text
+
     suggestion_columns = st.columns(4)
     for index, suggestion in enumerate(SUGGESTIONS):
         with suggestion_columns[index]:
-            if st.button(suggestion, key=f"suggestion_{index}", use_container_width=True):
-                st.session_state.pending_prompt = suggestion
+            st.button(
+                suggestion, key=f"suggestion_{index}", use_container_width=True,
+                on_click=_fill_draft, args=(suggestion,),
+            )
 
-    prompt = st.chat_input("Ask anything...") or st.session_state.pop("pending_prompt", None)
+    def _submit_draft():
+        draft = st.session_state.get("chat_draft", "").strip()
+        if draft:
+            st.session_state.pending_submit = draft
+        st.session_state.chat_draft = ""
+
+    input_col, send_col = st.columns([5, 1])
+    with input_col:
+        st.text_input(
+            "Ask anything...", key="chat_draft", label_visibility="collapsed",
+            placeholder="Ask anything...", on_change=_submit_draft,
+        )
+    with send_col:
+        st.button("Send", use_container_width=True, on_click=_submit_draft)
+
+    prompt = st.session_state.pop("pending_submit", None)
     if not prompt:
         return
 

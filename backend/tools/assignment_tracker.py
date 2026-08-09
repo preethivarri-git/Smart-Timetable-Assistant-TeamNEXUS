@@ -33,6 +33,7 @@ class AssignmentTracker:
             "title": row.title,
             "deadline": row.due_date.strftime("%Y-%m-%d") if row.due_date else "",
             "completed": row.status == "done",
+            "priority": row.priority or "medium",
         }
 
     def load_assignments(self):
@@ -44,15 +45,17 @@ class AssignmentTracker:
     # CRUD Operations
     # -----------------------------------------------------
 
-    def add_assignment(self, title, deadline):
+    def add_assignment(self, title, deadline, priority="medium"):
         """
         Add a new assignment for this user.
 
         deadline format:
         YYYY-MM-DD
+
+        priority: "low" / "medium" / "high"
         """
         due_date = datetime.strptime(deadline, "%Y-%m-%d")
-        new_id = storage.add_assignment(self.user_id, title, None, due_date)
+        new_id = storage.add_assignment(self.user_id, title, None, due_date, priority=priority)
         print("\nAssignment added successfully.\n")
         return new_id
 
@@ -107,6 +110,24 @@ class AssignmentTracker:
             print("\nAssignment Removed.\n")
         else:
             print("\nAssignment Not Found.\n")
+
+    # -----------------------------------------------------
+
+    def set_priority(self, assignment_id, priority):
+        """Change an assignment's priority. Scoped to this user."""
+
+        ok = storage.update_assignment_priority(assignment_id, self.user_id, priority)
+
+        if ok:
+            print(
+                "\nPriority Updated.\n"
+            )
+
+        else:
+
+            print(
+                "\nAssignment Not Found.\n"
+            )
 
     # -----------------------------------------------------
 

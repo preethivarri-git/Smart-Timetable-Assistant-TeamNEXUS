@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 from backend.agent.scheduler_agent import schedule
 from backend.calendar_service.auth import authenticate_google
 from backend.calendar_service.google_calendar import create_event, list_events
-from backend.calendar_service.schedule_manager import load_schedule
+from backend.calendar_service.schedule_manager import list_semesters, load_schedule
 from backend.database.storage import init_db
 from backend.tools.assignment_tracker import AssignmentTracker
 from components.analytics import render_analytics
@@ -58,7 +58,10 @@ events = calendar_events()
 due = tracker.check_due_assignments()
 
 if page == "Home":
-    render_hero()
+    semesters = list_semesters(st.session_state.user_id)
+    selected = st.session_state.get("semester_select")
+    current_semester = selected if selected and selected != "+ New semester" else (semesters[0] if semesters else "Unassigned")
+    render_hero(semester=current_semester)
     st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
     sync_clicked = render_timetable()
     if sync_clicked:
@@ -93,13 +96,17 @@ elif page == "Courses":
 
 elif page == "Assignments":
     st.markdown("<div class='eyebrow'>Academic workflow</div><h1>Assignment tracker</h1>", unsafe_allow_html=True)
+    PRIORITY_COLORS = {"high": "#e5484d", "medium": "#f5a623", "low": "#30a46c"}
+    PRIORITY_LABELS = {"high": "High", "medium": "Medium", "low": "Low"}
+
     with st.form("assignment_form", clear_on_submit=True):
-        first, second = st.columns([2, 1])
+        first, second, third = st.columns([2, 1, 1])
         title = first.text_input("Assignment title")
         deadline = second.date_input("Deadline", min_value=datetime.now().date())
+        priority = third.selectbox("Priority", ["high", "medium", "low"], index=1, format_func=lambda p: PRIORITY_LABELS[p])
         if st.form_submit_button("Add assignment"):
             if title.strip():
-                tracker.add_assignment(title.strip(), deadline.isoformat())
+                tracker.add_assignment(title.strip(), deadline.isoformat(), priority)
                 st.success("Assignment added.")
                 st.rerun()
             else:
@@ -108,10 +115,21 @@ elif page == "Assignments":
     if assignments:
         for assignment in assignments:
             status = "Completed" if assignment["completed"] else f"Due {assignment['deadline']}"
-            row, action = st.columns([5, 1])
-            row.markdown(f"<div class='event-row'><span class='event-dot'></span><div><div class='event-title'>{assignment['title']}</div><div class='event-time'>{status}</div></div></div>", unsafe_allow_html=True)
+            p = assignment.get("priority", "medium")
+            color = PRIORITY_COLORS.get(p, "#f5a623")
+            badge = f"<span style='background:{color}22;color:{color};border:1px solid {color}55;border-radius:999px;padding:2px 10px;font-size:.72rem;font-weight:600;margin-left:8px'>{PRIORITY_LABELS.get(p, 'Medium')}</span>"
+            row, action, prio_col = st.columns([4, 1, 1.3])
+            row.markdown(f"<div class='event-row'><span class='event-dot'></span><div><div class='event-title'>{assignment['title']}{badge}</div><div class='event-time'>{status}</div></div></div>", unsafe_allow_html=True)
             if not assignment["completed"] and action.button("Done", key=f"done_{assignment['id']}"):
                 tracker.mark_completed(assignment["id"])
+                st.rerun()
+            new_priority = prio_col.selectbox(
+                "Priority", ["high", "medium", "low"], index=["high", "medium", "low"].index(p),
+                key=f"prio_{assignment['id']}", label_visibility="collapsed",
+                format_func=lambda x: PRIORITY_LABELS[x],
+            )
+            if new_priority != p:
+                tracker.set_priority(assignment["id"], new_priority)
                 st.rerun()
     else:
         st.markdown("<p class='muted'>No assignments yet. Add a deadline to stay ahead.</p>", unsafe_allow_html=True)
