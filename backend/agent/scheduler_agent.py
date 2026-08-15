@@ -90,6 +90,31 @@ def schedule(user_input, user_id):
         # ===================================================
 
         data = parse_schedule_request(user_input)
+        intent = data.get("intent")
+
+        if intent == "question":
+            return data.get(
+                "response",
+                "That looks like a question, so I did not create anything."
+            )
+
+        if intent == "confirmation":
+            return "Please use the Yes button for the event currently waiting for approval."
+
+        if intent == "cancellation":
+            return "Please use the No button to cancel the event currently waiting for approval."
+
+        if intent == "unknown":
+            return data.get(
+                "response",
+                "I am not sure what you would like to do. Please rephrase your request."
+            )
+
+        if intent == "move_class":
+            return "Moving an existing class is not available yet. Please edit the class from the timetable."
+
+        if intent not in {"event", "assignment"}:
+            return "I did not understand that request, so I did not create anything."
 
         # ===================================================
         # Assignment Intent
@@ -103,9 +128,25 @@ def schedule(user_input, user_id):
         # Event Intent
         # ===================================================
 
-        start = datetime.now() + timedelta(days=data["day_offset"])
-        start = start.replace(hour=data["hour"], minute=data["minute"], second=0, microsecond=0)
-        end = start + timedelta(hours=data["duration"])
+        summary = str(data.get("summary", "")).strip()
+
+        if not summary:
+            return "I could not identify an event name, so I did not create anything."
+
+        try:
+            day_offset = int(data["day_offset"])
+            hour = int(data["hour"])
+            minute = int(data["minute"])
+            duration = float(data["duration"])
+        except (KeyError, TypeError, ValueError):
+            return "I could not understand the event date or time, so I did not create anything."
+
+        if day_offset < 0 or hour not in range(24) or minute not in range(60) or duration <= 0:
+            return "The event date, time, or duration is invalid, so I did not create anything."
+
+        start = datetime.now() + timedelta(days=day_offset)
+        start = start.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        end = start + timedelta(hours=duration)
 
         result = check_conflicts(service, start, end)
 
@@ -115,14 +156,16 @@ def schedule(user_input, user_id):
             conflicting_titles = [e.get("summary", "Untitled Event") for e in result["events"]]
             return {
                 "status": "conflict",
-                "summary": data["summary"],
+                "summary": summary,
                 "conflicting_events": conflicting_titles,
+                "requested_start": start,
+                "requested_end": end,
                 "suggested_start": result["suggested_start"],
                 "suggested_end": result["suggested_end"],
             }
 
-        create_event(service, data["summary"], start, end)
-        return f"✅ '{data['summary']}' scheduled for {start.strftime('%A %d %b, %I:%M %p')}."
+        create_event(service, summary, start, end)
+        return f"✅ '{summary}' scheduled for {start.strftime('%A %d %b, %I:%M %p')}."
 
     except Exception as e:
         return f"Scheduler Error: {e}"

@@ -27,27 +27,19 @@ def _get_model():
         os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     )
 
-
 SYSTEM_PROMPT = f"""
-You are an AI Scheduling Assistant.
+You are the message classifier for a student scheduling assistant.
 
 Today's date is {datetime.now().strftime("%Y-%m-%d")}.
 
-Your task is to identify the user's intent.
+Return ONLY valid JSON. Do not use Markdown.
 
-There are ONLY THREE intents:
+Choose exactly one intent:
 
 1. event
-2. assignment
-3. move_class
+Use only when the user clearly asks to create a new calendar event or reminder.
 
-Return ONLY valid JSON.
-
-------------------------------------------------
-
-If the user wants to schedule a calendar event,
-return JSON in this format:
-
+Return:
 {{
     "intent": "event",
     "summary": "",
@@ -56,178 +48,83 @@ return JSON in this format:
     "minute": 0,
     "duration": 1
 }}
+Event rules:
+- today means day_offset = 0
+- tomorrow means day_offset = 1
+- Convert AM/PM time to 24-hour format
+- If minutes are not mentioned, use 0
+- If duration is not mentioned, use 1 hour
+- summary must be the event name and must never be empty
 
-Rules:
 
-- today → day_offset = 0
-- tomorrow → day_offset = 1
-- Convert PM to 24-hour format
-- If minutes aren't mentioned, use 0
-- If duration isn't mentioned, use 1 hour
+2. assignment
+Use only when the user clearly asks to add an assignment.
 
-Examples
-
-User:
-Schedule AI Lab tomorrow at 3 PM for 2 hours
-
-Output
-
+Return:
 {{
-    "intent":"event",
-    "summary":"AI Lab",
-    "day_offset":1,
-    "hour":15,
-    "minute":0,
-    "duration":2
+    "intent": "assignment",
+    "title": "",
+    "deadline": "YYYY-MM-DD"
 }}
 
-----------------------------
+3. move_class
+Use when the user asks to move an existing class.
 
-User:
-Book Gym today at 6 PM
-
-Output
-
-{{
-    "intent":"event",
-    "summary":"Gym",
-    "day_offset":0,
-    "hour":18,
-    "minute":0,
-    "duration":1
-}}
-
-------------------------------------------------
-
-If the user wants to manage an assignment,
-return JSON in this format:
-
-{{
-    "intent":"assignment",
-    "title":"",
-    "deadline":"YYYY-MM-DD"
-}}
-
-Examples
-
-User:
-Add assignment DBMS due tomorrow
-
-Output
-
-{{
-    "intent":"assignment",
-    "title":"DBMS",
-    "deadline":"2026-07-20"
-}}
-
-----------------------------
-
-User:
-AI Report due Friday
-
-Output
-
-{{
-    "intent":"assignment",
-    "title":"AI Report",
-    "deadline":"2026-07-24"
-}}
-
-----------------------------
-
-User:
-Add assignment Machine Learning Project due August 1
-
-Output
-
-{{
-    "intent":"assignment",
-    "title":"Machine Learning Project",
-    "deadline":"2026-08-01"
-}}
-
-------------------------------------------------
-
-If the user wants to move, reschedule, or shift an
-EXISTING recurring class to a different day and/or time
-(e.g. "move my DBMS lecture to Wednesday", "shift OS lab
-to 4pm", "reschedule Operating Systems Lab to Friday 2pm"),
-return JSON in this format:
-
+Return:
 {{
     "intent": "move_class",
     "class_query": "",
-    "new_day": "",
-    "new_start_time": null,
-    "new_end_time": null
-}}
-
-Rules:
-
-- class_query: the class name/subject as the user referred to it
-  (do not guess a full official name — use their words)
-- new_day: one of Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
-  (use null if no new day was mentioned)
-- new_start_time / new_end_time: 24-hour "HH:MM" strings if a new time
-  was mentioned, otherwise null (null means keep the class's existing time)
-- This intent is ONLY for existing recurring classes being moved.
-  A brand new one-time booking (e.g. "schedule a meeting tomorrow at 5pm")
-  is "event", not "move_class".
-
-Examples
-
-User:
-Move my DBMS lecture to Wednesday
-
-Output
-
-{{
-    "intent": "move_class",
-    "class_query": "DBMS",
-    "new_day": "Wednesday",
-    "new_start_time": null,
-    "new_end_time": null
-}}
-
-----------------------------
-
-User:
-Shift Operating Systems Lab to 4 PM
-
-Output
-
-{{
-    "intent": "move_class",
-    "class_query": "Operating Systems Lab",
     "new_day": null,
-    "new_start_time": "16:00",
+    "new_start_time": null,
     "new_end_time": null
 }}
 
-----------------------------
+4. question
+Use when the user asks a question, explains something, corrects the assistant,
+or makes a normal conversational statement.
 
-User:
-Reschedule AI Lecture to Friday 2 PM to 3 PM
-
-Output
-
+Return:
 {{
-    "intent": "move_class",
-    "class_query": "AI Lecture",
-    "new_day": "Friday",
-    "new_start_time": "14:00",
-    "new_end_time": "15:00"
+    "intent": "question",
+    "response": "A short, helpful reply to the user's question."
+}}
+For a question, write a short helpful response.
+Do not invent calendar events, assignments, conflicts, or approvals.
+If the answer requires personal calendar data you do not have, say that clearly.
+
+5. confirmation
+Use only when the user clearly says yes, approve, confirm, or accept.
+
+Return:
+{{
+    "intent": "confirmation"
 }}
 
-------------------------------------------------
+6. cancellation
+Use only when the user clearly says no, cancel, reject, or do not schedule.
 
-Return ONLY valid JSON.
+Return:
+{{
+    "intent": "cancellation"
+}}
 
-Do not explain anything.
+7. unknown
+Use when the message is unclear.
+
+Return:
+{{
+    "intent": "unknown",
+    "response": "I am not sure what you would like to do. Please ask me to schedule an event, add an assignment, or ask about your timetable."
+}}
+
+Important rules:
+- Never classify a question or normal comment as an event.
+- Never create an event with an empty summary.
+- "What was the conflict?" is a question.
+- "I didn't approve it" is a question.
+- "Schedule a doctor appointment tomorrow at 1 PM" is an event.
+- "Add DBMS assignment due Friday" is an assignment.
 """
-
-
 def parse_schedule_request(user_input):
     """
     Converts natural language into structured JSON.
@@ -247,4 +144,16 @@ def parse_schedule_request(user_input):
             .strip()
         )
 
-    return json.loads(text)
+    try:
+        data = json.loads(text)
+
+        if not isinstance(data, dict) or "intent" not in data:
+            raise ValueError("Gemini returned an invalid response")
+
+        return data
+
+    except (json.JSONDecodeError, ValueError):
+        return {
+            "intent": "unknown",
+            "response": "I could not understand that safely. Please rephrase your request."
+        }
