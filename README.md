@@ -94,7 +94,7 @@ TIMETABLE SCHEDULER/
 - [x] Course-specific scheduling (Lecture / Lab / Tutorial)
 - [x] Exam schedule management with study time allocation
 - [x] Assignment deadline tracking with priority levels
-- [x] Indian academic calendar support (semester breaks, festivals)
+- [ ] Indian academic calendar support (semester breaks, festivals)
 
 **Week 7-8: Polish & Production**
 - [x] Professional Streamlit interface (Smart Scheduler design system)
