@@ -12,8 +12,8 @@ def inject_styles():
             --radius:16px;
         }
         .stApp { background: var(--bg); color: var(--text); font-family:'Inter',sans-serif; }
-        #MainMenu, footer, header { visibility:hidden; }
-        .block-container { padding:1.5rem 2rem 3rem; max-width:1500px; }
+        footer { visibility:hidden; }
+        .block-container { padding:4.5rem 2rem 3rem; max-width:1500px; }
 
         [data-testid="stSidebar"] { background:#FFFFFF; border-right:1px solid var(--line); }
         [data-testid="stSidebar"] > div:first-child { padding:1.35rem .85rem; }
@@ -83,6 +83,9 @@ def inject_styles():
         [data-testid="stMetricValue"] { color:var(--text); }
         [data-testid="stRadio"] label { border-radius:10px; padding:5px; }
         [data-testid="stRadio"] label:hover { background:var(--primary-light); }
+ 
+        .exam-actions .stButton > button {background: transparent !important;color: var(--muted) !important;border: 1px solid var(--line) !important;box-shadow: none !important;border-radius: 9px !important;font-size: 0.75rem !important;font-weight: 500 !important;padding: 7px 8px !important;min-height: 34px !important;}
+        .exam-actions .stButton > button:hover {background: var(--primary-light) !important;color: var(--primary) !important;border-color: var(--primary) !important;box-shadow: none !important;transform: none !important;}
         </style>
         """,
         unsafe_allow_html=True,

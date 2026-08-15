@@ -7,6 +7,7 @@ PAGES = [
     ("Home", "🏠"),
     ("Courses", "📚"),
     ("Assignments", "📝"),
+    ("Exams", "📅"),
     ("Analytics", "📊"),
     ("Settings", "⚙️"),
 ]

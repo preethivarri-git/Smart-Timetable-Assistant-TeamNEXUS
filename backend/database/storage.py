@@ -60,6 +60,7 @@ class User(Base):
     class_schedules = relationship("ClassSchedule", back_populates="user", cascade="all, delete-orphan")
     semester_templates = relationship("SemesterTemplate", back_populates="user", cascade="all, delete-orphan")
     assignments = relationship("Assignment", back_populates="user", cascade="all, delete-orphan")
+    exams = relationship("Exam", back_populates="user", cascade="all, delete-orphan")
 
 
 class GoogleToken(Base):
@@ -134,6 +135,22 @@ class Assignment(Base):
     description = Column(Text)
 
     user = relationship("User", back_populates="assignments")
+
+class Exam(Base):
+    __tablename__ = "exams"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    subject = Column(String(120), nullable=False)
+    exam_date = Column(DateTime, nullable=False)
+    duration_minutes = Column(Integer, default=180)
+    required_study_hours = Column(Integer, default=0)
+    completed = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="exams")
 
 
 # ---------------------------------------------------------------------------
@@ -402,3 +419,79 @@ def delete_assignment(assignment_id, user_id):
             db.delete(a)
             return True
         return False
+
+# ---------------------------------------------------------------------------
+# Exam CRUD
+# ---------------------------------------------------------------------------
+
+def add_exam(
+    user_id,
+    subject,
+    exam_date,
+    duration_minutes=180,
+    required_study_hours=0,
+):
+    with get_session() as db:
+        exam = Exam(
+            user_id=user_id,
+            subject=subject,
+            exam_date=exam_date,
+            duration_minutes=duration_minutes,
+            required_study_hours=required_study_hours,
+        )
+        db.add(exam)
+        db.flush()
+        return exam.id
+
+
+def get_exams(user_id, include_completed=True):
+    with get_session() as db:
+        query = db.query(Exam).filter(Exam.user_id == user_id)
+
+        if not include_completed:
+            query = query.filter(Exam.completed == False)
+
+        return query.order_by(Exam.exam_date).all()
+
+
+def update_exam(exam_id, user_id, **fields):
+    editable_fields = {
+        "subject",
+        "exam_date",
+        "duration_minutes",
+        "required_study_hours",
+        "completed",
+    }
+
+    with get_session() as db:
+        exam = db.query(Exam).filter(
+            Exam.id == exam_id,
+            Exam.user_id == user_id,
+        ).first()
+
+        if not exam:
+            return False
+
+        for key, value in fields.items():
+            if key in editable_fields:
+                setattr(exam, key, value)
+
+        return True
+
+
+def delete_exam(exam_id, user_id):
+    with get_session() as db:
+        exam = db.query(Exam).filter(
+            Exam.id == exam_id,
+            Exam.user_id == user_id,
+        ).first()
+
+        if not exam:
+            return False
+
+        db.delete(exam)
+        return True
+
+
+def mark_exam_completed(exam_id, user_id):
+    return update_exam(exam_id, user_id, completed=True)
