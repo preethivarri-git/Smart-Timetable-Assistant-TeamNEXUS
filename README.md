@@ -92,13 +92,13 @@ TIMETABLE SCHEDULER/
 **Week 5-6: Domain Specialization (Option A1 — Academic Schedule Manager)**
 - [x] Semester/term-based schedule templates
 - [x] Course-specific scheduling (Lecture / Lab / Tutorial)
-- [ ] Exam schedule management with study time allocation
-- [ ] Assignment deadline tracking with priority levels
-- [ ] Indian academic calendar support (semester breaks, festivals)
+- [x] Exam schedule management with study time allocation
+- [x] Assignment deadline tracking with priority levels
+- [x] Indian academic calendar support (semester breaks, festivals)
 
 **Week 7-8: Polish & Production**
 - [x] Professional Streamlit interface (Smart Scheduler design system)
 - [ ] MySQL-backed storage (currently JSON)
-- [ ] Login page with user accounts
+- [x] Login page with user accounts
 - [ ] Export functionality (calendar files, schedule reports)
 - [ ] Deployment
