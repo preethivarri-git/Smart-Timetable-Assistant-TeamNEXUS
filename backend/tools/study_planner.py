@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from backend.calendar_service.google_calendar import (DEFAULT_TIMEZONE,create_event,get_events_between,)
 from backend.tools.availability import find_free_slots_with_classes
+from backend.calendar_service.academic_calendar import is_non_academic_day
 
 def _to_naive_local(value):
     """Convert a datetime to naive Asia/Kolkata local time."""
@@ -44,6 +45,7 @@ def allocate_study_time(available_slots,required_hours,max_hours_per_day=2,sessi
             daily_minutes[day] = used_today
             current = session_end
     return sessions
+
 def create_exam_study_plan(service,user_id,exam,start_date=None,work_start_hour=8,work_end_hour=22,max_hours_per_day=2,session_minutes=60,):
     now = datetime.now()
     if start_date is None:
@@ -64,6 +66,9 @@ def create_exam_study_plan(service,user_id,exam,start_date=None,work_start_hour=
     all_free_slots = []
     current_day = start_date
     while current_day < exam_date:
+        if is_non_academic_day(current_day.date()):
+            current_day += timedelta(days=1)
+            continue
         now = datetime.now()
         if current_day.date() == now.date():
             if now.hour >= work_end_hour:
