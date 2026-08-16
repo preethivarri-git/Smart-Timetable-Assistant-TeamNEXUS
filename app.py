@@ -460,15 +460,16 @@ elif page == "Exams":
         )
 
         exam_time = third.time_input(
-            "Exam start time"
+            "Exam start time",
+            step=300,
         )
 
         duration = fourth.number_input(
             "Duration (minutes)",
-            min_value=15,
+            min_value=1,
             max_value=600,
             value=180,
-            step=15,
+            step=1,
         )
 
         study_hours = fifth.number_input(
@@ -1027,24 +1028,125 @@ elif page == "Exams":
                     # -------------------------------------
                     # SESSIONS
                     # -------------------------------------
-
                     if plan["sessions"]:
-
                         st.markdown(
                             "##### Planned Study Sessions"
                         )
-
+                        sessions_by_date = {}
                         for session in plan["sessions"]:
-
                             start = session["start"]
                             end = session["end"]
+                            date_key = start.date()
+                            if date_key not in sessions_by_date:
+                                sessions_by_date[date_key] = {"start": start,"end": end,}
+                            else:
+                                sessions_by_date[date_key]["start"] = min(sessions_by_date[date_key]["start"], start)
+                                sessions_by_date[date_key]["end"] = max(sessions_by_date[date_key]["end"], end)
+                        edited_sessions = []
 
-                            st.write(
-                                f"📚 **{start.strftime('%A, %d %b')}** — "
-                                f"{start.strftime('%I:%M %p')} – "
-                                f"{end.strftime('%I:%M %p')} "
-                                f"({session['duration_minutes']} min)"
+                        for index, (date_key, session_times) in enumerate(
+                            sessions_by_date.items()
+                        ):
+
+                            start = session_times["start"]
+                            end = session_times["end"]
+
+                            st.markdown(
+                                f"**📚 Session {index + 1}**"
                             )
+
+                            col_date, col_start, col_end = st.columns(3)
+
+                            with col_date:
+                                edited_date = st.date_input(
+                                    "Date",
+                                    value=start.date(),
+                                    key=f"study_date_{exam.id}_{index}",
+                                )
+
+                            with col_start:
+                                edited_start_time = st.time_input(
+                                    "Start",
+                                    value=start.time(),
+                                    key=f"study_start_{exam.id}_{index}",
+                                )
+
+                            with col_end:
+                                edited_end_time = st.time_input(
+                                    "End",
+                                    value=end.time(),
+                                    key=f"study_end_{exam.id}_{index}",
+                                )
+
+                            edited_start = datetime.combine(
+                                edited_date,
+                                edited_start_time,
+                            ).replace(tzinfo=start.tzinfo)
+
+                            edited_end = datetime.combine(
+                                edited_date,
+                                edited_end_time,
+                            ).replace(tzinfo=end.tzinfo)
+
+                            if edited_end <= edited_start:
+                                st.error(
+                                    f"Session {index + 1}: End time must be after start time."
+                                )
+                            else:
+                                duration_minutes = int(
+                                    (edited_end - edited_start).total_seconds() / 60
+                                )
+
+                            edited_sessions.append(
+                                {
+                                    "start": edited_start,
+                                    "end": edited_end,
+                                    "duration_minutes": duration_minutes,
+                                }
+                            )
+
+                            st.markdown("---")
+
+                        edited_allocated_minutes = sum(
+                            session["duration_minutes"]
+                            for session in edited_sessions
+                        )
+
+                        required_minutes = int(
+                            exam.required_study_hours * 60
+                        )
+
+                        edited_remaining_minutes = max(
+                            required_minutes - edited_allocated_minutes,
+                            0,
+                        )
+
+                        st.markdown(
+                            f"**Edited study time:** "
+                            f"{edited_allocated_minutes // 60}h "
+                            f"{edited_allocated_minutes % 60}m"
+                        )
+
+                        if edited_remaining_minutes > 0:
+                            st.warning(
+                                f"You still need "
+                                f"{edited_remaining_minutes // 60}h "
+                                f"{edited_remaining_minutes % 60}m "
+                                f"of study time."
+                            )                        
+
+                        else:
+                            st.success(
+                                "All required study time is scheduled."
+                            )
+
+    # Keep the edited sessions in the plan
+                        plan["sessions"] = edited_sessions
+                        plan["allocated_minutes"] = edited_allocated_minutes
+                        plan["remaining_minutes"] = edited_remaining_minutes
+                        plan["fully_allocated"] = (
+                            edited_remaining_minutes == 0
+                        )
 
                     else:
 
@@ -1053,53 +1155,63 @@ elif page == "Exams":
                             "before this exam."
                         )
 
+
                     col_confirm, col_cancel = st.columns(2)
+
                     with col_confirm:
 
-                            if st.button(
-                                "✅ Confirm & Add to Calendar",
-                                key=f"confirm_study_{exam.id}",
-                            ):
+                        if st.button(
+                            "✅ Confirm & Add to Calendar",
+                            key=f"confirm_study_{exam.id}",
+                            disabled=(
+                                not plan["sessions"]
+                                or not plan["fully_allocated"]
+                            ),
+                        ):
 
-                                try:
+                            try:
 
-                                    service = get_calendar_service(
-                                        st.session_state.user_id
-                                    )
+                                service = get_calendar_service(
+                                    st.session_state.user_id
+                                )
 
-                                    created_events = add_study_plan_to_calendar(
-                                        service=service,
-                                        exam=exam,
-                                        plan=plan,
-                                    )
+                                created_events = add_study_plan_to_calendar(
+                                service=service,
+                                exam=exam,
+                                plan=plan,
+                                )
 
-                                    st.session_state[
-                                        f"study_plan_confirmed_{exam.id}"
-                                    ] = True
-                                    st.success(
-                                        f"{len(created_events)} study session(s) "
-                                        "added to Google Calendar."
-                                    )
-                                except Exception as e:
-                                    st.error(
-                                        "Unable to add study plan to Google Calendar."
-                                    )
+                                st.session_state[
+                                    f"study_plan_confirmed_{exam.id}"
+                                ] = True
+
+                                st.success(
+                                    f"{len(created_events)} study session(s) "
+                                    "added to Google Calendar."
+                                )
+
+                            except Exception as e:
+
+                                st.error(
+                                    "Unable to add study plan to Google Calendar."
+                                )
                     with col_cancel:
+
                         if st.button(
                             "❌ Cancel",
                             key=f"cancel_study_{exam.id}",
                         ):
+
                             st.session_state.pop(
                                 f"study_plan_{exam.id}",
                                 None,
-                            )                    
-        
+                            )
+
                             st.session_state[
                                 f"generating_study_{exam.id}"
                             ] = False
+
                             st.rerun()
-
-
                     if st.button(
                         "Hide Study Plan",
                         key=f"hide_study_{exam.id}",

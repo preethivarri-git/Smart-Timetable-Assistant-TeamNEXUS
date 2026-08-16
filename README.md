@@ -94,11 +94,13 @@ TIMETABLE SCHEDULER/
 - [x] Course-specific scheduling (Lecture / Lab / Tutorial)
 - [x] Exam schedule management with study time allocation
 - [x] Assignment deadline tracking with priority levels
-- [ ] Indian academic calendar support (semester breaks, festivals)
+- [x] Indian academic calendar support (semester breaks, festivals)
 
 **Week 7-8: Polish & Production**
-- [x] Professional Streamlit interface (Smart Scheduler design system)
-- [ ] MySQL-backed storage (currently JSON)
+- [ ] Professional Streamlit interface (Smart Scheduler design system)
 - [x] Login page with user accounts
 - [ ] Export functionality (calendar files, schedule reports)
+- [ ] Add input validation for scheduling requests and calendar events
+- [ ] Implement proper error messages for API failures and scheduling conflicts
+- [ ] Write comprehensive README with setup instructions and API configurations
 - [ ] Deployment
