@@ -141,7 +141,7 @@ def schedule(user_input, user_id):
         start = start.replace(hour=hour, minute=minute, second=0, microsecond=0)
         end = start + timedelta(hours=duration)
 
-        result = check_conflicts(service, start, end)
+        result = check_conflicts(service, start, end, user_id=user_id)
 
         if result["conflict"]:
             # No console input() here — hand a structured conflict payload

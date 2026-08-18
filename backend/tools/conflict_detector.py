@@ -1,28 +1,49 @@
 from datetime import datetime, timedelta
+from backend.calendar_service.google_calendar import (get_events_between,normalize_calendar_datetime,)
+from backend.calendar_service.schedule_manager import load_schedule
 
-from backend.calendar_service.google_calendar import (
-    get_events_between,
-    normalize_calendar_datetime,
-)
+def _local_class_conflicts(user_id, start_time, end_time):
+    if user_id is None:
+        return []
+
+    weekday = start_time.strftime("%A")
+    conflicts = []
+
+    for class_entry in load_schedule(user_id):
+        if class_entry.get("day") != weekday:
+            continue
+
+        raw_start = class_entry.get("start_time")
+        raw_end = class_entry.get("end_time")
+        if not raw_start or not raw_end:
+            continue
+
+        try:
+            class_start_time = datetime.strptime(str(raw_start), "%H:%M").time()
+            class_end_time = datetime.strptime(str(raw_end), "%H:%M").time()
+        except ValueError:
+            try:
+                class_start_time = datetime.strptime(str(raw_start), "%H:%M:%S").time()
+                class_end_time = datetime.strptime(str(raw_end), "%H:%M:%S").time()
+            except ValueError:
+                continue
+
+        class_start = start_time.replace(hour=class_start_time.hour,minute=class_start_time.minute,second=0,microsecond=0,)
+        class_end = start_time.replace(hour=class_end_time.hour,minute=class_end_time.minute,second=0,microsecond=0,)
+        class_start = normalize_calendar_datetime(class_start)
+        class_end = normalize_calendar_datetime(class_end)
+
+        if start_time < class_end and end_time > class_start:
+            conflicts.append({
+                "summary": f"{class_entry.get('name', 'Class')} ({class_entry.get('type', 'Lecture')})",
+                "start": {"dateTime": class_start.isoformat()},
+                "end": {"dateTime": class_end.isoformat()},
+            })
+
+    return conflicts
 
 
-def check_conflicts(service, start_time, end_time):
-    """
-    Check if a new event overlaps with existing calendar events.
-
-    Args:
-        service: Google Calendar service object
-        start_time (datetime): Proposed start time
-        end_time (datetime): Proposed end time
-
-    Returns:
-        {
-            "conflict": bool,
-            "events": list,
-            "suggested_start": datetime | None,
-            "suggested_end": datetime | None
-        }
-    """
+def check_conflicts(service, start_time, end_time, user_id=None):
 
     start_time = normalize_calendar_datetime(start_time)
     end_time = normalize_calendar_datetime(end_time)
@@ -53,6 +74,9 @@ def check_conflicts(service, start_time, end_time):
 
         if start_time < existing_end and end_time > existing_start:
             conflicts.append(event)
+
+    # Local weekly timetable classes count as conflicts too now.
+    conflicts.extend(_local_class_conflicts(user_id, start_time, end_time))
 
     if not conflicts:
         return {
