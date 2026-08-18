@@ -1,20 +1,7 @@
 import streamlit as st
-
-from backend.calendar_service.schedule_manager import (
-    CLASS_TYPES,
-    add_class,
-    apply_template,
-    classes_for_semester,
-    delete_class,
-    get_color_for_class,
-    list_semesters,
-    load_templates,
-    save_current_as_template,
-)
-
+from backend.tools.validation import validate_class_fields
+from backend.calendar_service.schedule_manager import (CLASS_TYPES,add_class,apply_template,classes_for_semester,delete_class,get_color_for_class,list_semesters,load_templates,save_current_as_template,)
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-
-
 def render_timetable():
     user_id = st.session_state.user_id
     st.markdown("<div class='section-title'><h3>Weekly Timetable</h3></div>", unsafe_allow_html=True)
@@ -89,8 +76,9 @@ def _render_add_class_form(user_id, semester):
         end_time = end.time_input("End time")
         submitted = st.form_submit_button("Add class")
         if submitted:
-            if not name.strip():
-                st.warning("Enter a class name.")
+            error = validate_class_fields(name, day, start_time, end_time, room, instructor)
+            if error:
+                st.warning(error)
             else:
                 add_class(user_id, name.strip(), day, str(start_time), str(end_time), room, instructor, class_type, semester)
                 st.session_state.show_add_class = False

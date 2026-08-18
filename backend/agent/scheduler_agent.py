@@ -1,22 +1,14 @@
 from datetime import datetime, timedelta
-
+from backend.tools.validation import validate_event_request
 from backend.agent.nlp_parser import parse_schedule_request
 from backend.calendar_service.auth import get_calendar_service
 from backend.calendar_service.google_calendar import create_event
 from backend.tools.assignment_tracker import AssignmentTracker
-from backend.tools.availability import (
-    find_free_slots,
-    print_free_slots,
-)
+from backend.tools.availability import (find_free_slots,print_free_slots,)
 from backend.tools.conflict_detector import check_conflicts
 from backend.tools.query_handler import QueryHandler
 
-
 def schedule(user_input, user_id):
-    """
-    Main AI Scheduling Agent
-    """
-
     try:
 
         service = get_calendar_service(user_id)
@@ -141,8 +133,9 @@ def schedule(user_input, user_id):
         except (KeyError, TypeError, ValueError):
             return "I could not understand the event date or time, so I did not create anything."
 
-        if day_offset < 0 or hour not in range(24) or minute not in range(60) or duration <= 0:
-            return "The event date, time, or duration is invalid, so I did not create anything."
+        validation_error = validate_event_request(day_offset, hour, minute, duration)
+        if validation_error:
+            return f"{validation_error} I did not create anything."
 
         start = datetime.now() + timedelta(days=day_offset)
         start = start.replace(hour=hour, minute=minute, second=0, microsecond=0)

@@ -1,27 +1,30 @@
-import tempfile
 import unittest
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from backend.database import storage
 from backend.tools.assignment_tracker import AssignmentTracker
 from backend.tools.reminder import ReminderService
+
+TEST_USER_ID = -999002
 
 
 class ReminderServiceTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        file_path = Path(self.temp_dir.name) / "assignments.json"
-        self.tracker = AssignmentTracker(file_path)
+        self.tracker = AssignmentTracker(TEST_USER_ID)
+        self._created_ids = []
 
     def tearDown(self):
-        self.temp_dir.cleanup()
+        for assignment_id in self._created_ids:
+            storage.delete_assignment(assignment_id, TEST_USER_ID)
 
     @patch("backend.tools.reminder.smtplib.SMTP_SSL")
     def test_sends_a_reminder_for_an_assignment_due_today(self, smtp_ssl):
-        self.tracker.add_assignment(
+        new_id = self.tracker.add_assignment(
             "DBMS Assignment", datetime.now().strftime("%Y-%m-%d")
         )
+        self._created_ids.append(new_id)
+
         smtp = MagicMock()
         smtp_ssl.return_value.__enter__.return_value = smtp
         service = ReminderService(
@@ -39,7 +42,9 @@ class ReminderServiceTests(unittest.TestCase):
     def test_does_not_require_email_settings_when_nothing_is_due(self):
         service = ReminderService(tracker=self.tracker)
 
-        self.assertEqual(service.send_due_assignment_reminders("student@example.com"), 0)
+        self.assertEqual(
+            service.send_due_assignment_reminders("student@example.com"), 0
+        )
 
 
 if __name__ == "__main__":
