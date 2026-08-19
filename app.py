@@ -186,13 +186,13 @@ elif page == "Courses":
     local_classes = load_schedule(st.session_state.user_id)
 
     if view_mode == "Week":
-        render_weekly_grid(local_classes, st.session_state.service)
+        render_weekly_grid(local_classes, st.session_state.service, st.session_state.user_id)
 
     elif view_mode == "Day":
         selected_date = st.date_input(
             "Date", value=datetime.now().date(), key="daily_view_date"
         )
-        render_daily_view(local_classes, st.session_state.service, selected_date)
+        render_daily_view(local_classes, st.session_state.service, st.session_state.user_id, selected_date)
 
     else:  # Month
         month_col, year_col = st.columns(2)
@@ -211,7 +211,7 @@ elif page == "Courses":
             step=1,
             key="monthly_view_year",
         )
-        render_monthly_view(local_classes, st.session_state.service, selected_year, selected_month)
+        render_monthly_view(local_classes, st.session_state.service, st.session_state.user_id, selected_year, selected_month)
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 

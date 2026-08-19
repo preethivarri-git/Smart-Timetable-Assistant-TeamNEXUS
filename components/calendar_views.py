@@ -1,4 +1,5 @@
 
+
 from datetime import datetime, timedelta, date as date_cls
 from zoneinfo import ZoneInfo
 
@@ -6,10 +7,14 @@ import streamlit as st
 
 from backend.calendar_service.google_calendar import get_events_between, DEFAULT_TIMEZONE
 from backend.calendar_service.schedule_manager import get_color_for_class
+from backend.database.storage import get_exams
 
 DAYS_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 HOUR_HEIGHT_PX = 52
+EXAM_COLOR = "#DE3030B6"
+CLASS_BADGE_COLOR = "#298EE0B3"
+EVENT_COLOR = "#C24FF7A2"
 
 
 def _hour_decimal(time_str, fallback=None):
@@ -27,9 +32,7 @@ def _hour_decimal(time_str, fallback=None):
 
 def _event_time_range(event):
     """Returns (start_datetime, end_datetime, is_all_day) for a Calendar event
-    dict, normalized to the app's local timezone (Asia/Kolkata) — NOT just
-    tzinfo-stripped, which would silently show UTC-stored events at the wrong
-    hour."""
+    dict, normalized to the app's local timezone."""
     start_raw = event["start"].get("dateTime")
     end_raw = event["end"].get("dateTime")
     if not start_raw or not end_raw:
@@ -41,7 +44,6 @@ def _event_time_range(event):
 
 
 def _week_bounds(reference_date):
-    """Returns (monday_date, sunday_date) for the week containing reference_date."""
     monday = reference_date - timedelta(days=reference_date.weekday())
     sunday = monday + timedelta(days=6)
     return monday, sunday
@@ -58,18 +60,29 @@ def _fetch_week_events(service, monday):
         return []
 
 
+def _fetch_exams_safe(user_id):
+    try:
+        return get_exams(user_id, include_completed=True)
+    except Exception:
+        return []
+
+
 def _class_block_html(name, class_type, room, top_px, height_px, color):
-    # Single line — see module docstring for why.
     return "<div style=\"position:absolute;top:" + str(top_px) + "px;left:2px;right:2px;height:" + str(max(height_px, 22)) + "px;background:" + color + "22;border-left:3px solid " + color + ";border-radius:8px;padding:4px 6px;overflow:hidden;\"><div style=\"font-size:.68rem;font-weight:700;color:" + color + ";line-height:1.1\">" + class_type + "</div><div style=\"font-weight:600;font-size:.74rem;line-height:1.15;color:var(--text)\">" + name + "</div><div style=\"font-size:.65rem;color:var(--muted)\">" + room + "</div></div>"
 
 
 def _event_block_html(summary, top_px, height_px):
-    return "<div style=\"position:absolute;top:" + str(top_px) + "px;left:2px;right:2px;height:" + str(max(height_px, 22)) + "px;background:#4F8EF722;border-left:3px solid #4F8EF7;border-radius:8px;padding:4px 6px;overflow:hidden;\"><div style=\"font-size:.68rem;font-weight:700;color:#4F8EF7;line-height:1.1\">Event</div><div style=\"font-weight:600;font-size:.74rem;line-height:1.15;color:var(--text)\">" + summary + "</div></div>"
+    return "<div style=\"position:absolute;top:" + str(top_px) + "px;left:2px;right:2px;height:" + str(max(height_px, 22)) + "px;background:" + EVENT_COLOR + "22;border-left:3px solid " + EVENT_COLOR + ";border-radius:8px;padding:4px 6px;overflow:hidden;\"><div style=\"font-size:.68rem;font-weight:700;color:" + EVENT_COLOR + ";line-height:1.1\">Event</div><div style=\"font-weight:600;font-size:.74rem;line-height:1.15;color:var(--text)\">" + summary + "</div></div>"
 
 
-def render_weekly_grid(classes, service, reference_date=None, work_start_hour=7, work_end_hour=22):
+def _exam_block_html(subject, top_px, height_px):
+    return "<div style=\"position:absolute;top:" + str(top_px) + "px;left:2px;right:2px;height:" + str(max(height_px, 22)) + "px;background:" + EXAM_COLOR + "22;border-left:3px solid " + EXAM_COLOR + ";border-radius:8px;padding:4px 6px;overflow:hidden;\"><div style=\"font-size:.68rem;font-weight:700;color:" + EXAM_COLOR + ";line-height:1.1\">Exam</div><div style=\"font-weight:600;font-size:.74rem;line-height:1.15;color:var(--text)\">" + subject + "</div></div>"
+
+
+def render_weekly_grid(classes, service, user_id, reference_date=None, work_start_hour=7, work_end_hour=22):
     """A time-axis weekly grid: hour rows on the left, day columns across the top,
-    classes and Google Calendar events positioned by their actual start time/duration.
+    classes, exams, and Google Calendar events positioned by their actual
+    start time/duration.
 
     Note: all-day Google Calendar events are skipped here (no time to position
     them by) — they still show up in the Day and Month views below.
@@ -77,6 +90,7 @@ def render_weekly_grid(classes, service, reference_date=None, work_start_hour=7,
     reference_date = reference_date or datetime.now().date()
     monday, sunday = _week_bounds(reference_date)
     events = _fetch_week_events(service, monday)
+    exams = [e for e in _fetch_exams_safe(user_id) if monday <= e.exam_date.date() <= sunday]
 
     total_hours = work_end_hour - work_start_hour
     grid_height = total_hours * HOUR_HEIGHT_PX
@@ -124,6 +138,17 @@ def render_weekly_grid(classes, service, reference_date=None, work_start_hour=7,
             height = (min(end_h, work_end_hour) - max(start_h, work_start_hour)) * HOUR_HEIGHT_PX
             blocks_html += _event_block_html(event.get("summary", "Untitled"), top, height)
 
+        for exam in exams:
+            if exam.exam_date.date() != day_date:
+                continue
+            start_h = exam.exam_date.hour + exam.exam_date.minute / 60
+            end_h = start_h + (exam.duration_minutes or 180) / 60
+            if end_h <= work_start_hour or start_h >= work_end_hour:
+                continue
+            top = (max(start_h, work_start_hour) - work_start_hour) * HOUR_HEIGHT_PX
+            height = (min(end_h, work_end_hour) - max(start_h, work_start_hour)) * HOUR_HEIGHT_PX
+            blocks_html += _exam_block_html(exam.subject, top, height)
+
         day_columns_html += "<div style=\"flex:1;min-width:0;border-left:1px solid var(--line);position:relative;height:" + str(grid_height) + "px\">" + blocks_html + "</div>"
 
     day_headers_html = "".join(
@@ -136,8 +161,9 @@ def render_weekly_grid(classes, service, reference_date=None, work_start_hour=7,
     st.markdown(grid_html, unsafe_allow_html=True)
 
 
-def render_daily_view(classes, service, selected_date):
-    """Hour-by-hour list for a single day, combining local classes and Google Calendar events."""
+def render_daily_view(classes, service, user_id, selected_date):
+    """Hour-by-hour list for a single day, combining local classes, exams,
+    and Google Calendar events."""
     day_name = selected_date.strftime("%A")
 
     items = []
@@ -154,6 +180,18 @@ def render_daily_view(classes, service, selected_date):
             "color": get_color_for_class(c),
         })
 
+    for exam in _fetch_exams_safe(user_id):
+        if exam.exam_date.date() != selected_date:
+            continue
+        exam_end = exam.exam_date + timedelta(minutes=exam.duration_minutes or 180)
+        items.append({
+            "sort_key": exam.exam_date.hour + exam.exam_date.minute / 60,
+            "label": exam.subject + " (Exam)",
+            "time_str": exam.exam_date.strftime('%I:%M %p') + " – " + exam_end.strftime('%I:%M %p'),
+            "detail": "",
+            "color": EXAM_COLOR,
+        })
+
     if service:
         day_start = datetime.combine(selected_date, datetime.min.time())
         day_end = day_start + timedelta(days=1)
@@ -164,14 +202,14 @@ def render_daily_view(classes, service, selected_date):
         for event in events:
             start_dt, end_dt, is_all_day = _event_time_range(event)
             if is_all_day:
-                items.append({"sort_key": -1, "label": event.get("summary", "Untitled"), "time_str": "All day", "detail": "", "color": "#4F8EF7"})
+                items.append({"sort_key": -1, "label": event.get("summary", "Untitled"), "time_str": "All day", "detail": "", "color": EVENT_COLOR})
             else:
                 items.append({
                     "sort_key": start_dt.hour + start_dt.minute / 60,
                     "label": event.get("summary", "Untitled"),
                     "time_str": start_dt.strftime('%I:%M %p') + " – " + end_dt.strftime('%I:%M %p'),
                     "detail": "",
-                    "color": "#4F8EF7",
+                    "color": EVENT_COLOR,
                 })
 
     items.sort(key=lambda i: i["sort_key"])
@@ -190,9 +228,10 @@ def render_daily_view(classes, service, selected_date):
     st.markdown("<div class='glass-card'>" + rows_html + "</div>", unsafe_allow_html=True)
 
 
-def render_monthly_view(classes, service, year, month):
-    """A 6x7 month grid. Each cell shows the date and a count of items that day
-    (recurring classes matching that weekday + any Google Calendar events)."""
+def render_monthly_view(classes, service, user_id, year, month):
+    """A 6x7 month grid. Each cell shows the date and a count of items that
+    day: recurring classes (green badge), exams (red badge), and Google
+    Calendar events (blue badge)."""
     import calendar as pycal
 
     month_start = date_cls(year, month, 1)
@@ -217,6 +256,12 @@ def render_monthly_view(classes, service, year, month):
             if event_date:
                 events_by_date.setdefault(event_date, []).append(event)
 
+    exams_by_date = {}
+    for exam in _fetch_exams_safe(user_id):
+        d = exam.exam_date.date()
+        if month_start <= d <= month_end:
+            exams_by_date.setdefault(d, []).append(exam)
+
     classes_by_weekday = {}
     for c in classes:
         classes_by_weekday.setdefault(c.get("day"), []).append(c)
@@ -227,9 +272,9 @@ def render_monthly_view(classes, service, year, month):
     for col, label in zip(header_cols, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]):
         col.markdown("<div class='muted' style='text-align:center;font-weight:600;font-size:.75rem'>" + label + "</div>", unsafe_allow_html=True)
 
-    first_weekday = month_start.weekday()  # Monday = 0
+    first_weekday = month_start.weekday()
     total_cells = first_weekday + days_in_month
-    total_rows = -(-total_cells // 7)  # ceil division
+    total_rows = -(-total_cells // 7)
 
     cell_index = 0
     for _ in range(total_rows):
@@ -240,15 +285,18 @@ def render_monthly_view(classes, service, year, month):
                 cell_date = date_cls(year, month, day_number)
                 weekday_name = cell_date.strftime("%A")
                 class_count = len(classes_by_weekday.get(weekday_name, []))
+                exam_count = len(exams_by_date.get(cell_date, []))
                 event_count = len(events_by_date.get(cell_date, []))
                 is_today = cell_date == datetime.now().date()
 
                 border = "2px solid var(--primary)" if is_today else "1px solid var(--line)"
                 dots = ""
                 if class_count:
-                    dots += "<span style='background:var(--primary);color:white;border-radius:999px;padding:1px 6px;font-size:.62rem;margin-right:3px'>" + str(class_count) + " class</span>"
+                    dots += "<span style='background:" + CLASS_BADGE_COLOR + ";color:white;border-radius:999px;padding:1px 6px;font-size:.62rem;margin-right:3px'>" + str(class_count) + " class</span>"
+                if exam_count:
+                    dots += "<span style='background:" + EXAM_COLOR + ";color:white;border-radius:999px;padding:1px 6px;font-size:.62rem;margin-right:3px'>" + str(exam_count) + " exam</span>"
                 if event_count:
-                    dots += "<span style='background:#4F8EF7;color:white;border-radius:999px;padding:1px 6px;font-size:.62rem'>" + str(event_count) + " event</span>"
+                    dots += "<span style='background:" + EVENT_COLOR + ";color:white;border-radius:999px;padding:1px 6px;font-size:.62rem'>" + str(event_count) + " event</span>"
 
                 cell_html = "<div style='border:" + border + ";border-radius:10px;padding:6px;min-height:64px'>" + "<div style='font-size:.78rem;font-weight:600'>" + str(day_number) + "</div>" + "<div style='margin-top:4px'>" + dots + "</div>" + "</div>"
                 col.markdown(cell_html, unsafe_allow_html=True)
