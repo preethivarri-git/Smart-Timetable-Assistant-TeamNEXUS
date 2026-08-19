@@ -213,10 +213,10 @@ class AssignmentTracker:
 
     # -----------------------------------------------------
 
-    def check_due_assignments(self):
+    def check_due_assignments(self, days_before=2):
         """
         Returns this user's assignments due within
-        the next two days.
+        the next `days_before` days(defaults to 2, matching the previous hardcoded behavior.
         """
 
         assignments = self.load_assignments()
@@ -242,7 +242,7 @@ class AssignmentTracker:
                 deadline - today
             ).days
 
-            if 0 <= days_left <= 2:
+            if 0 <= days_left <= days_before:
 
                 due.append(
                     {

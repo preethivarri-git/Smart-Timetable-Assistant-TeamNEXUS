@@ -73,6 +73,15 @@ class GoogleToken(Base):
 
     user = relationship("User", back_populates="google_token")
 
+class NotificationSettings(Base):
+    __tablename__ = "notification_settings"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    email_reminders_enabled = Column(Boolean, default=False)
+    reminder_days_before = Column(Integer, default=2)
+    notification_email = Column(String(120))
+    last_sent_date = Column(String(10))  # "YYYY-MM-DD" — informational, not auto-enforced yet
 
 class SemesterTemplate(Base):
     """
@@ -207,6 +216,49 @@ def get_google_token(user_id: int):
         row = db.query(GoogleToken).filter(GoogleToken.user_id == user_id).first()
         return row.token_json if row else None
 
+# ---------------------------------------------------------------------------
+# Notification settings helpers (used by app.py Settings page)
+# ---------------------------------------------------------------------------
+def get_notification_settings(user_id):
+    with get_session() as db:
+        row = db.query(NotificationSettings).filter(NotificationSettings.user_id == user_id).first()
+        if row is None:
+            return {
+                "email_reminders_enabled": False,
+                "reminder_days_before": 2,
+                "notification_email": "",
+                "last_sent_date": None,
+            }
+        return {
+            "email_reminders_enabled": row.email_reminders_enabled,
+            "reminder_days_before": row.reminder_days_before,
+            "notification_email": row.notification_email or "",
+            "last_sent_date": row.last_sent_date,
+        }
+
+
+def save_notification_settings(user_id, email_reminders_enabled, reminder_days_before, notification_email):
+    with get_session() as db:
+        existing = db.query(NotificationSettings).filter(NotificationSettings.user_id == user_id).first()
+        if existing:
+            existing.email_reminders_enabled = email_reminders_enabled
+            existing.reminder_days_before = reminder_days_before
+            existing.notification_email = notification_email
+        else:
+            db.add(NotificationSettings(
+                user_id=user_id,
+                email_reminders_enabled=email_reminders_enabled,
+                reminder_days_before=reminder_days_before,
+                notification_email=notification_email,
+            ))
+
+
+def mark_reminders_sent_today(user_id):
+    from datetime import date
+    with get_session() as db:
+        existing = db.query(NotificationSettings).filter(NotificationSettings.user_id == user_id).first()
+        if existing:
+            existing.last_sent_date = date.today().isoformat()
 
 # ---------------------------------------------------------------------------
 # Class schedule / semester template / assignment CRUD

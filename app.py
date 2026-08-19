@@ -5,9 +5,10 @@ from backend.agent.scheduler_agent import schedule
 from backend.calendar_service.auth import (authenticate_google,get_calendar_service,)
 from backend.calendar_service.google_calendar import (create_event,list_events,)
 from backend.calendar_service.schedule_manager import (list_semesters,load_schedule,)
-from backend.database.storage import (init_db,add_exam,get_exams,update_exam,delete_exam,mark_exam_completed,)
+from backend.database.storage import (init_db,add_exam,get_exams,update_exam,delete_exam,mark_exam_completed,get_notification_settings, save_notification_settings, mark_reminders_sent_today,)
 from backend.tools.assignment_tracker import AssignmentTracker
 from backend.tools.study_planner import (create_exam_study_plan,add_study_plan_to_calendar,prioritize_exams)
+from backend.tools.reminder import ReminderService
 from components.analytics import render_analytics
 from components.cards import render_topbar
 from components.calendar import render_timetable
@@ -1307,7 +1308,11 @@ else:
 
     st.markdown(
         "<div class='eyebrow'>Workspace</div>"
-        "<h1>Settings</h1>"
+        "<h1>Settings</h1>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
         "<div class='glass-card'>"
         "<h3>Appearance</h3>"
         "<p class='muted'>"
@@ -1316,3 +1321,86 @@ else:
         "</div>",
         unsafe_allow_html=True,
     )
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    st.markdown(
+        "<div class='glass-card'>"
+        "<h3>Assignment reminders</h3>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    current_settings = get_notification_settings(st.session_state.user_id)
+
+    with st.form("notification_settings_form"):
+        enabled = st.checkbox(
+            "Email me about assignments due soon",
+            value=current_settings["email_reminders_enabled"],
+        )
+        days_before = st.number_input(
+            "Remind me this many days before the deadline",
+            min_value=0,
+            max_value=14,
+            value=current_settings["reminder_days_before"],
+            step=1,
+        )
+        notification_email = st.text_input(
+            "Send reminders to",
+            value=current_settings["notification_email"],
+            placeholder="you@example.com",
+        )
+
+        saved = st.form_submit_button("Save notification settings")
+
+        if saved:
+            if enabled and not notification_email.strip():
+                st.warning("Enter an email address to enable reminders.")
+            else:
+                save_notification_settings(
+                    st.session_state.user_id,
+                    enabled,
+                    int(days_before),
+                    notification_email.strip(),
+                )
+                st.success("Notification settings saved.")
+                st.rerun()
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    settings_now = get_notification_settings(st.session_state.user_id)
+
+    if settings_now["email_reminders_enabled"]:
+        due_soon = tracker.check_due_assignments(days_before=settings_now["reminder_days_before"])
+
+        if due_soon:
+            st.info(f"{len(due_soon)} assignment(s) due within {settings_now['reminder_days_before']} day(s).")
+
+            if st.button("Send reminders now"):
+                try:
+                    reminder_service = ReminderService(tracker=tracker)
+                    sent = reminder_service.send_due_assignment_reminders(
+                        settings_now["notification_email"],
+                        days_before=settings_now["reminder_days_before"],
+                    )
+                    mark_reminders_sent_today(st.session_state.user_id)
+                    st.success(f"Sent {sent} reminder email(s).")
+                except ValueError as error:
+                    st.error(str(error))
+                except Exception:
+                    st.error(
+                        "Could not send reminders — check EMAIL_ADDRESS and "
+                        "EMAIL_PASSWORD in your .env file."
+                    )
+        else:
+            st.markdown(
+                "<p class='muted'>No assignments due soon — nothing to remind about.</p>",
+                unsafe_allow_html=True,
+            )
+
+        st.caption(f"Last sent: {settings_now['last_sent_date'] or 'never'}")
+    else:
+        st.markdown(
+            "<p class='muted'>Email reminders are turned off.</p>",
+            unsafe_allow_html=True,
+        )

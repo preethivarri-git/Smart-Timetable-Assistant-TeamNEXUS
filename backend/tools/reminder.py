@@ -22,19 +22,19 @@ class ReminderService:
         smtp_port=465,
     ):
         self.tracker = tracker or AssignmentTracker()
-        self.email_address = email_address or os.getenv("EMAIL_ADDRESS")
-        self.email_password = email_password or os.getenv("EMAIL_PASSWORD")
+        self.email_address = (email_address or os.getenv("EMAIL_ADDRESS") or "").strip()
+        self.email_password = (email_password or os.getenv("EMAIL_PASSWORD") or "").strip()
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
 
-    def send_due_assignment_reminders(self, recipient):
-        """Send one reminder per incomplete assignment due within two days.
+    def send_due_assignment_reminders(self, recipient, days_before=2):
+        """Send one reminder per incomplete assignment due within 'days_before' days.
 
         Returns the number of messages sent.  No email is sent when there are
         no upcoming assignments.
         """
 
-        due_assignments = self.tracker.check_due_assignments()
+        due_assignments = self.tracker.check_due_assignments(days_before=days_before)
 
         if not due_assignments:
             return 0
@@ -44,21 +44,27 @@ class ReminderService:
                 "Set EMAIL_ADDRESS and EMAIL_PASSWORD before sending reminders."
             )
 
-        with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port) as smtp:
-            smtp.login(self.email_address, self.email_password)
+        try:
+            with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port) as smtp:
+                smtp.login(self.email_address, self.email_password)
 
-            for assignment in due_assignments:
-                days_left = assignment["days_left"]
-                day_label = "today" if days_left == 0 else f"in {days_left} day(s)"
+                for assignment in due_assignments:
+                    days_left = assignment["days_left"]
+                    day_label = "today" if days_left == 0 else f"in {days_left} day(s)"
 
-                message = EmailMessage()
-                message["From"] = self.email_address
-                message["To"] = recipient
-                message["Subject"] = f"Assignment reminder: {assignment['title']}"
-                message.set_content(
-                    f"{assignment['title']} is due {day_label} "
-                    f"({assignment['deadline']})."
-                )
-                smtp.send_message(message)
+                    message = EmailMessage()
+                    message["From"] = self.email_address
+                    message["To"] = recipient
+                    message["Subject"] = f"Assignment reminder: {assignment['title']}"
+                    message.set_content(
+                        f"{assignment['title']} is due {day_label} "
+                        f"({assignment['deadline']})."
+                    )
+                    smtp.send_message(message)
+        except smtplib.SMTPAuthenticationError as exc:
+            raise ValueError(
+                "Gmail SMTP authentication failed. Use an App Password instead of the regular Gmail password. "
+                "Set EMAIL_PASSWORD to your Google App Password for this project."
+            ) from exc
 
         return len(due_assignments)

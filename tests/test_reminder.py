@@ -1,3 +1,4 @@
+import smtplib
 import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -29,15 +30,37 @@ class ReminderServiceTests(unittest.TestCase):
         smtp_ssl.return_value.__enter__.return_value = smtp
         service = ReminderService(
             tracker=self.tracker,
-            email_address="sender@example.com",
-            email_password="test-password",
+            email_address=" sender@example.com ",
+            email_password=" test-password \n",
         )
 
         sent = service.send_due_assignment_reminders("student@example.com")
 
         self.assertEqual(sent, 1)
+        self.assertEqual(service.email_address, "sender@example.com")
+        self.assertEqual(service.email_password, "test-password")
         smtp.login.assert_called_once_with("sender@example.com", "test-password")
         smtp.send_message.assert_called_once()
+
+    @patch("backend.tools.reminder.smtplib.SMTP_SSL")
+    def test_raises_clear_message_for_gmail_authentication_errors(self, smtp_ssl):
+        new_id = self.tracker.add_assignment(
+            "DBMS Assignment", datetime.now().strftime("%Y-%m-%d")
+        )
+        self._created_ids.append(new_id)
+
+        smtp = MagicMock()
+        smtp.login.side_effect = smtplib.SMTPAuthenticationError(535, b"Authentication failed")
+        smtp_ssl.return_value.__enter__.return_value = smtp
+
+        service = ReminderService(
+            tracker=self.tracker,
+            email_address="sender@example.com",
+            email_password="wrong-password",
+        )
+
+        with self.assertRaisesRegex(ValueError, "App Password|Gmail"):
+            service.send_due_assignment_reminders("student@example.com")
 
     def test_does_not_require_email_settings_when_nothing_is_due(self):
         service = ReminderService(tracker=self.tracker)
