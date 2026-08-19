@@ -5,12 +5,13 @@ from googleapiclient.errors import HttpError
 from backend.tools.friendly_errors import friendly_calendar_error, friendly_missing_credentials_message
 from backend.agent.scheduler_agent import schedule
 from backend.calendar_service.auth import (authenticate_google,get_calendar_service,)
-from backend.calendar_service.google_calendar import (create_event,list_events,)
+from backend.calendar_service.google_calendar import (create_event,list_events,get_events_between,)
 from backend.calendar_service.schedule_manager import (list_semesters,load_schedule,)
 from backend.database.storage import (init_db,add_exam,get_exams,update_exam,delete_exam,mark_exam_completed,get_notification_settings, save_notification_settings, mark_reminders_sent_today,)
 from backend.tools.assignment_tracker import AssignmentTracker
 from backend.tools.study_planner import (create_exam_study_plan,add_study_plan_to_calendar,prioritize_exams)
 from backend.tools.reminder import ReminderService
+from backend.tools.export import export_full_schedule_to_ics, assignments_to_csv, exams_to_csv
 from backend.tools.analytics import (week_free_hours,calendar_utilization_percent,assignments_complete_percent,exams_with_study_plan_percent,)
 from components.analytics import render_analytics
 from components.cards import render_topbar
@@ -215,6 +216,27 @@ elif page == "Courses":
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
+    export_events = []
+    if st.session_state.service:
+        try:
+            export_start = datetime.now()
+            export_end = export_start + timedelta(days=90)
+            export_events = get_events_between(st.session_state.service, export_start, export_end)
+        except Exception:
+            export_events = []
+
+    export_exams = get_exams(st.session_state.user_id, include_completed=True)
+    ics_data = export_full_schedule_to_ics(local_classes, export_exams, export_events)
+
+    st.download_button(
+        "📅 Download schedule (.ics)",
+        data=ics_data,
+        file_name="smart_scheduler_export.ics",
+        mime="text/calendar",
+    )
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
     with st.expander(
         "Create a calendar event"
     ):
@@ -359,6 +381,13 @@ elif page == "Assignments":
                 st.warning(
                     "Enter an assignment title."
                 )
+    if assignments:
+        st.download_button(
+            "⬇️ Download assignments (.csv)",
+            data=assignments_to_csv(assignments),
+            file_name="assignments.csv",
+            mime="text/csv",
+        )
 
     st.markdown(
         "<div class='glass-card'>",
@@ -654,6 +683,14 @@ elif page == "Exams":
             "Next Exam",
             next_exam_name,
             next_exam_date,
+        )
+
+    if summary_exams:
+        st.download_button(
+            "⬇️ Download exams (.csv)",
+            data=exams_to_csv(summary_exams),
+            file_name="exams.csv",
+            mime="text/csv",
         )
 
     # -----------------------------------------------------
