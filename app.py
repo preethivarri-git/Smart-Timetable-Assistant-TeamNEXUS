@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 import streamlit as st
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from backend.tools.friendly_errors import friendly_calendar_error, friendly_missing_credentials_message
 from backend.agent.scheduler_agent import schedule
 from backend.calendar_service.auth import (authenticate_google,get_calendar_service,)
 from backend.calendar_service.google_calendar import (create_event,list_events,)
@@ -38,11 +40,33 @@ def calendar_events():
             st.session_state.service,
             max_results=12,
         )
-    except Exception as error:
-        st.warning(
-            f"Calendar unavailable: {error}"
-        )
+    except HttpError as error:
+        st.warning(friendly_calendar_error(error))
         return []
+    except Exception as error:
+        st.warning(f"Calendar unavailable: {error}")
+        return []
+
+
+def connect_calendar():
+    try:
+        credentials = authenticate_google(
+            st.session_state.user_id
+        )
+        st.session_state.service = build(
+            "calendar",
+            "v3",
+            credentials=credentials,
+        )
+        st.success(
+            "Google Calendar connected."
+        )
+    except FileNotFoundError:
+        st.error(friendly_missing_credentials_message())
+    except HttpError as error:
+        st.error(friendly_calendar_error(error))
+    except Exception as error:
+        st.error(f"Could not connect Calendar: {error}")
 
 
 def connect_calendar():

@@ -8,7 +8,8 @@ from backend.tools.conflict_detector import check_conflicts
 from backend.tools.query_handler import QueryHandler
 from backend.calendar_service.schedule_manager import load_schedule, update_class
 from backend.tools.validation import validate_event_request, validate_class_time
-
+from googleapiclient.errors import HttpError
+from backend.tools.friendly_errors import friendly_calendar_error, friendly_missing_credentials_message
 def schedule(user_input, user_id):
     try:
 
@@ -161,8 +162,12 @@ def schedule(user_input, user_id):
         create_event(service, summary, start, end)
         return f"✅ '{summary}' scheduled for {start.strftime('%A %d %b, %I:%M %p')}."
 
+    except FileNotFoundError:
+        return friendly_missing_credentials_message()
+    except HttpError as error:
+        return friendly_calendar_error(error)
     except Exception as e:
-        return f"Scheduler Error: {e}"
+        return f"Something went wrong while processing that request: {e}. Please try again."
 
 def _parse_time_field(value):
     """Accepts '14:00', '09:05:00', '2:00 PM', or '2 PM'. Returns a
@@ -228,6 +233,13 @@ def _handle_move_class(data, user_id):
 
 def confirm_conflict_schedule(summary, suggested_start, suggested_end, user_id):
     """Called from chat.py when the user clicks 'Yes' on a conflict prompt."""
-    service = get_calendar_service(user_id)
-    create_event(service, summary, suggested_start, suggested_end)
-    return f"✅ '{summary}' scheduled for {suggested_start.strftime('%A %d %b, %I:%M %p')} (moved to avoid conflict)."
+    try:
+        service = get_calendar_service(user_id)
+        create_event(service, summary, suggested_start, suggested_end)
+        return f"✅ '{summary}' scheduled for {suggested_start.strftime('%A %d %b, %I:%M %p')} (moved to avoid conflict)."
+    except FileNotFoundError:
+        return friendly_missing_credentials_message()
+    except HttpError as error:
+        return friendly_calendar_error(error)
+    except Exception as e:
+        return f"Something went wrong while scheduling that: {e}. Please try again."

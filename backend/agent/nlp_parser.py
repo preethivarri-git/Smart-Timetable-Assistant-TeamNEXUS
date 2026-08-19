@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-
+from google.api_core import exceptions as google_api_exceptions
 from dotenv import load_dotenv
 
 try:
@@ -21,6 +21,8 @@ def _get_model():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
              raise RuntimeError("GEMINI_API_KEY environment variable is not set")
+    if api_key.strip().lower() in {"invalid", "your_gemini_api_key_here"}:
+        raise RuntimeError("GEMINI_API_KEY is still set to a placeholder value")
 
     genai.configure(api_key=api_key)
     return genai.GenerativeModel(
@@ -135,10 +137,37 @@ def parse_schedule_request(user_input):
     """
     Converts natural language into structured JSON.
     """
-    model = _get_model()
-    response = model.generate_content(
-        SYSTEM_PROMPT + "\n\nUser:\n" + user_input
-    )
+    try:
+        model = _get_model()
+        response = model.generate_content(
+            SYSTEM_PROMPT + "\n\nUser:\n" + user_input
+        )
+    except RuntimeError as error:
+        # Raised by _get_model() itself — missing library or missing API key.
+        return {
+            "intent": "unknown",
+            "response": f"Setup issue: {error} Please check your .env file.",
+        }
+    except google_api_exceptions.ResourceExhausted:
+        return {
+            "intent": "unknown",
+            "response": "I'm getting a lot of requests right now (Gemini quota reached). Please try again in a minute.",
+        }
+    except google_api_exceptions.ServiceUnavailable:
+        return {
+            "intent": "unknown",
+            "response": "The AI service is temporarily unavailable. Please try again shortly.",
+        }
+    except google_api_exceptions.DeadlineExceeded:
+        return {
+            "intent": "unknown",
+            "response": "That took too long to process. Please try again.",
+        }
+    except google_api_exceptions.GoogleAPIError as error:
+        return {
+            "intent": "unknown",
+            "response": f"The AI service returned an error ({error.__class__.__name__}). Please try again in a moment.",
+        }
 
     text = response.text.strip()
 
