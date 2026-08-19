@@ -11,6 +11,7 @@ from backend.database.storage import (init_db,add_exam,get_exams,update_exam,del
 from backend.tools.assignment_tracker import AssignmentTracker
 from backend.tools.study_planner import (create_exam_study_plan,add_study_plan_to_calendar,prioritize_exams)
 from backend.tools.reminder import ReminderService
+from backend.tools.analytics import (week_free_hours,calendar_utilization_percent,assignments_complete_percent,exams_with_study_plan_percent,)
 from components.analytics import render_analytics
 from components.cards import render_topbar
 from components.calendar import render_timetable
@@ -1313,14 +1314,21 @@ elif page == "Analytics":
         ]
     )
 
+    free_hours = week_free_hours(st.session_state.service, st.session_state.user_id)
+    calendar_utilization_pct = calendar_utilization_percent(free_hours)
+    assignments_complete_pct = assignments_complete_percent(assignments)
+
+    upcoming_exams = get_exams(st.session_state.user_id, include_completed=False)
+    focus_blocks_pct = exams_with_study_plan_percent(st.session_state.service, upcoming_exams)
+
     render_analytics(
         len(events),
-        len(
-            load_schedule(
-                st.session_state.user_id
-            )
-        ),
+        len(load_schedule(st.session_state.user_id)),
         open_assignments,
+        free_hours=free_hours,
+        calendar_utilization_pct=calendar_utilization_pct,
+        focus_blocks_pct=focus_blocks_pct,
+        assignments_complete_pct=assignments_complete_pct,
     )
 
 
