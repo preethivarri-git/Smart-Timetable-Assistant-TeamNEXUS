@@ -9,7 +9,9 @@ from backend.database.storage import (init_db,add_exam,get_exams,update_exam,del
 from backend.tools.assignment_tracker import AssignmentTracker
 from backend.tools.study_planner import (create_exam_study_plan,add_study_plan_to_calendar,prioritize_exams)
 from components.analytics import render_analytics
+from components.cards import render_topbar
 from components.calendar import render_timetable
+from components.calendar_views import render_weekly_grid, render_daily_view, render_monthly_view
 from components.cards import event_list, render_topbar
 from components.chat import render_agent
 from components.hero import render_hero
@@ -144,26 +146,48 @@ elif page == "Courses":
     if not st.session_state.service:
         st.info(
             "Connect Google Calendar from the sidebar "
-            "to load live events."
+            "to load live events alongside your classes below."
         )
 
-    st.markdown(
-        "<div class='glass-card'>"
-        "<div class='section-title'>"
-        "<h3>All upcoming events</h3>"
-        "</div>",
-        unsafe_allow_html=True,
+    view_mode = st.radio(
+        "View",
+        ["Week", "Day", "Month"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="calendar_view_mode",
     )
 
-    event_list(
-        events,
-        "No upcoming events. Create one and reclaim your calendar.",
-    )
+    local_classes = load_schedule(st.session_state.user_id)
 
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    if view_mode == "Week":
+        render_weekly_grid(local_classes, st.session_state.service)
+
+    elif view_mode == "Day":
+        selected_date = st.date_input(
+            "Date", value=datetime.now().date(), key="daily_view_date"
+        )
+        render_daily_view(local_classes, st.session_state.service, selected_date)
+
+    else:  # Month
+        month_col, year_col = st.columns(2)
+        selected_month = month_col.selectbox(
+            "Month",
+            list(range(1, 13)),
+            index=datetime.now().month - 1,
+            format_func=lambda m: datetime(2000, m, 1).strftime("%B"),
+            key="monthly_view_month",
+        )
+        selected_year = year_col.number_input(
+            "Year",
+            min_value=2020,
+            max_value=2100,
+            value=datetime.now().year,
+            step=1,
+            key="monthly_view_year",
+        )
+        render_monthly_view(local_classes, st.session_state.service, selected_year, selected_month)
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     with st.expander(
         "Create a calendar event"
