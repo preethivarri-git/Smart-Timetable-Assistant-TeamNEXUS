@@ -71,6 +71,23 @@ class FindFreeSlotsTests(unittest.TestCase):
         self.assertEqual(len(slots), 2)
         self.assertEqual((slots[0][0].hour, slots[0][1].hour), (8, 9))
         self.assertEqual((slots[1][0].hour, slots[1][1].hour), (12, 22))
+class FormatFreeSlotsTests(unittest.TestCase):
+    def test_lists_each_slot(self):
+        from backend.tools.availability import format_free_slots
+
+        slots = [
+            (datetime(2026, 8, 18, 8, 0), datetime(2026, 8, 18, 10, 0)),
+            (datetime(2026, 8, 18, 11, 0), datetime(2026, 8, 18, 22, 0)),
+        ]
+        result = format_free_slots(slots)
+        self.assertIn("08:00 AM", result)
+        self.assertIn("10:00 PM", result)
+
+    def test_when_empty(self):
+        from backend.tools.availability import format_free_slots
+
+        result = format_free_slots([])
+        self.assertIn("don't have any free slots", result)
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@ from backend.agent.nlp_parser import parse_schedule_request
 from backend.calendar_service.auth import get_calendar_service
 from backend.calendar_service.google_calendar import create_event
 from backend.tools.assignment_tracker import AssignmentTracker
-from backend.tools.availability import (find_free_slots,print_free_slots,)
+from backend.tools.availability import (find_free_slots,format_free_slots,)
 from backend.tools.conflict_detector import check_conflicts
 from backend.tools.query_handler import QueryHandler
 from backend.calendar_service.schedule_manager import load_schedule, update_class
@@ -24,24 +24,21 @@ def schedule(user_input, user_id):
         # ===================================================
 
         if command == "show assignments":
-            tracker.show_assignments()
-            return
+            return tracker.show_assignments()
 
         elif command.startswith("mark assignment"):
             try:
                 assignment_id = int(command.split()[2])
-                tracker.mark_completed(assignment_id)
+                return tracker.mark_completed(assignment_id)
             except Exception:
-                print("\nUsage: mark assignment <id>\n")
-            return
+                return "Usage: mark assignment <id>"
 
         elif command.startswith("remove assignment"):
             try:
                 assignment_id = int(command.split()[2])
-                tracker.remove_assignment(assignment_id)
+                return tracker.remove_assignment(assignment_id)
             except Exception:
-                print("\nUsage: remove assignment <id>\n")
-            return
+                return "Usage: remove assignment <id>"
 
         # ===================================================
         # Free Time
@@ -52,32 +49,26 @@ def schedule(user_input, user_id):
             if "tomorrow" in command:
                 day += timedelta(days=1)
             slots = find_free_slots(service, day)
-            print_free_slots(slots)
-            return
+            return format_free_slots(slots)
 
         # ===================================================
         # Schedule Queries
         # ===================================================
 
         elif "schedule today" in command:
-            query.show_schedule(0)
-            return
+            return query.show_schedule(0)
 
         elif "schedule tomorrow" in command:
-            query.show_schedule(1)
-            return
+            return query.show_schedule(1)
 
         elif "next meeting" in command or "next event" in command:
-            query.next_event()
-            return
+            return query.next_event()
 
         elif "anything tomorrow" in command:
-            query.has_events(1)
-            return
+            return query.has_events(1)
 
         elif "busy tomorrow" in command:
-            query.busy_hours(1)
-            return
+            return query.busy_hours(1)
 
         # ===================================================
         # NLP
@@ -116,7 +107,7 @@ def schedule(user_input, user_id):
 
         if data["intent"] == "assignment":
             tracker.add_assignment(data["title"], data["deadline"])
-            return
+            return f"✅ Added assignment '{data['title']}' due {data['deadline']}."
 
         # ===================================================
         # Event Intent

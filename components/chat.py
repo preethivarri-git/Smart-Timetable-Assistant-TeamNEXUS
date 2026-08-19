@@ -1,6 +1,3 @@
-import io
-from contextlib import redirect_stdout
-
 import streamlit as st
 
 from backend.agent.scheduler_agent import confirm_conflict_schedule
@@ -231,12 +228,8 @@ def render_agent(schedule):
                 "Thinking through your schedule...",
                 expanded=False,
             ):
-                output = io.StringIO()
-
                 try:
-                    with redirect_stdout(output):
-                        result = schedule(prompt, user_id)
-
+                    result = schedule(prompt, user_id)
                 except Exception as error:
                     result = f"I couldn't complete that request: {error}"
 
@@ -247,14 +240,12 @@ def render_agent(schedule):
                 st.rerun()
 
             else:
-                response = (
-                    result
-                    or output.getvalue().strip()
-                    or "Done. Your request has been processed."
-                )
+                response = result or "Done. Your request has been processed."
 
                 st.write_stream(f"{word} " for word in response.split())
 
                 st.session_state.chat_messages.append(
                     {"role": "assistant", "content": response}
                 )
+
+            

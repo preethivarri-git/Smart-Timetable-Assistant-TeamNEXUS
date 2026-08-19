@@ -62,54 +62,35 @@ class AssignmentTracker:
     # -----------------------------------------------------
 
     def show_assignments(self):
-        """Display all of this user's assignments."""
+        """Returns a formatted summary of all of this user's assignments."""
 
         assignments = self.load_assignments()
 
         if not assignments:
+            return "You don't have any assignments yet."
 
-            print("\nNo assignments found.\n")
-            return
-
-        print("\nAssignments\n")
+        lines = ["Assignments:\n"]
 
         for assignment in assignments:
-
-            status = (
-                "Completed"
-                if assignment["completed"]
-                else "Pending"
+            status = "Completed" if assignment["completed"] else "Pending"
+            lines.append(
+                f"ID {assignment['id']}: {assignment['title']} — "
+                f"due {assignment['deadline']} ({status})"
             )
 
-            print(
-                f"ID        : {assignment['id']}"
-            )
-
-            print(
-                f"Title     : {assignment['title']}"
-            )
-
-            print(
-                f"Deadline  : {assignment['deadline']}"
-            )
-
-            print(
-                f"Status    : {status}"
-            )
-
-            print("-" * 40)
+        return "\n".join(lines)
 
     # -----------------------------------------------------
 
     def remove_assignment(self, assignment_id):
-        """Delete assignment using ID. Scoped to this user."""
+        """Delete assignment using ID. Scoped to this user. Returns a status message."""
 
         ok = storage.delete_assignment(assignment_id, self.user_id)
 
         if ok:
-            print("\nAssignment Removed.\n")
-        else:
-            print("\nAssignment Not Found.\n")
+            return "Assignment removed."
+
+        return "Assignment not found."
 
     # -----------------------------------------------------
 
@@ -132,20 +113,14 @@ class AssignmentTracker:
     # -----------------------------------------------------
 
     def mark_completed(self, assignment_id):
-        """Mark assignment as completed. Scoped to this user."""
+        """Mark assignment as completed. Scoped to this user. Returns a status message."""
 
         ok = storage.update_assignment_status(assignment_id, self.user_id, "done")
 
         if ok:
-            print(
-                "\nAssignment Marked Completed.\n"
-            )
+            return "Assignment marked completed."
 
-        else:
-
-            print(
-                "\nAssignment Not Found.\n"
-            )
+        return "Assignment not found."
 
     # -----------------------------------------------------
 

@@ -7,6 +7,15 @@ from backend.calendar_service.google_calendar import (
 )
 
 
+def _day_label(day_offset):
+    if day_offset == 0:
+        return "today"
+    if day_offset == 1:
+        return "tomorrow"
+    day = datetime.now() + timedelta(days=day_offset)
+    return f"on {day.strftime('%A, %d %B')}"
+
+
 class QueryHandler:
 
     def __init__(self, service):
@@ -43,26 +52,23 @@ class QueryHandler:
 
     def show_schedule(self, day_offset=0):
         """
-        Prints all events for today/tomorrow/etc.
+        Returns a conversational summary of events for the given day.
         """
 
         events = self._get_day_events(day_offset)
+        label = _day_label(day_offset)
 
         if not events:
-            print("\nNo events scheduled.\n")
-            return
+            return f"You don't have anything scheduled {label}. 🎉"
 
-        print("\nYour Schedule\n")
-
-        for event in events:
-            print(format_event_summary(event))
-            print("-" * 40)
+        lines = [format_event_summary(event) for event in events]
+        return f"Here's what's on {label}:\n\n" + "\n\n".join(lines)
 
     # ----------------------------------------------------
 
     def next_event(self):
         """
-        Prints the next upcoming event.
+        Returns the next upcoming event, or a message if there isn't one.
         """
 
         now = normalize_calendar_datetime(datetime.now())
@@ -76,24 +82,20 @@ class QueryHandler:
         )
 
         if not events:
-            print("\nNo upcoming events.\n")
-            return
+            return "You don't have any upcoming events in the next 30 days."
 
-        print("\nNext Event\n")
-        print(format_event_summary(events[0]))
+        return "Your next event is:\n\n" + format_event_summary(events[0])
 
     # ----------------------------------------------------
 
     def events_after(self, hour):
         """
-        Shows all events after a given hour.
+        Returns events after a given hour today.
         """
 
         events = self._get_day_events()
 
-        found = False
-
-        print(f"\nEvents after {hour}:00\n")
+        matching = []
 
         for event in events:
 
@@ -107,19 +109,18 @@ class QueryHandler:
             )
 
             if start.hour >= hour:
+                matching.append(format_event_summary(event))
 
-                found = True
-                print(format_event_summary(event))
-                print("-" * 40)
+        if not matching:
+            return f"You don't have anything after {hour}:00 today."
 
-        if not found:
-            print("No events found.")
+        return f"Events after {hour}:00 today:\n\n" + "\n\n".join(matching)
 
     # ----------------------------------------------------
 
     def busy_hours(self, day_offset=0):
         """
-        Calculates occupied hours.
+        Returns how many hours are occupied for the given day.
         """
 
         events = self._get_day_events(day_offset)
@@ -149,49 +150,47 @@ class QueryHandler:
             total += end - start
 
         hours = total.total_seconds() / 3600
+        label = _day_label(day_offset)
 
-        print(
-            f"\nBusy for {hours:.1f} hour(s)\n"
-        )
+        if hours == 0:
+            return f"You're completely free {label}."
+
+        return f"You're busy for {hours:.1f} hour(s) {label}."
 
     # ----------------------------------------------------
 
     def has_events(self, day_offset=0):
         """
-        Checks whether any events exist.
+        Returns whether any events exist for the given day.
         """
 
         events = self._get_day_events(day_offset)
+        label = _day_label(day_offset)
 
         if events:
-            print(
-                f"\nYes, you have {len(events)} event(s).\n"
-            )
-        else:
-            print(
-                "\nNo events scheduled.\n"
-            )
+            plural = "event" if len(events) == 1 else "events"
+            return f"Yes, you have {len(events)} {plural} {label}."
+
+        return f"No, you don't have anything scheduled {label}."
 
     # ----------------------------------------------------
 
     def list_titles(self, day_offset=0):
         """
-        Prints only event titles.
+        Returns only event titles for the given day.
         """
 
         events = self._get_day_events(day_offset)
 
         if not events:
-            print("\nNo events found.\n")
-            return
+            return "You don't have any events to list."
 
-        print("\nEvent List\n")
+        lines = [
+            f"{i}. {event.get('summary', 'Untitled')}"
+            for i, event in enumerate(events, 1)
+        ]
 
-        for i, event in enumerate(events, 1):
-
-            print(
-                f"{i}. {event.get('summary', 'Untitled')}"
-            )
+        return "\n".join(lines)
 
     # ----------------------------------------------------
 
@@ -202,22 +201,13 @@ class QueryHandler:
 
         events = self._get_day_events()
 
-        found = False
+        matches = [
+            format_event_summary(event)
+            for event in events
+            if keyword.lower() in event.get("summary", "").lower()
+        ]
 
-        for event in events:
+        if not matches:
+            return f"I couldn't find an event matching '{keyword}' today."
 
-            title = event.get(
-                "summary",
-                ""
-            ).lower()
-
-            if keyword.lower() in title:
-
-                found = True
-                print(format_event_summary(event))
-                print("-" * 40)
-
-        if not found:
-            print(
-                "\nNo matching event found.\n"
-            )
+        return "\n\n".join(matches)

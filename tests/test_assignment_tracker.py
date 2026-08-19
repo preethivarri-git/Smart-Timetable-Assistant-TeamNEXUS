@@ -41,7 +41,33 @@ class AssignmentTrackerTests(unittest.TestCase):
             due = self.tracker.check_due_assignments(days_before=6)
             self.assertEqual(len(due), 1)
             self.assertEqual(due[0]["title"], "Far Off Assignment")
+    def test_show_assignments_returns_a_summary_string(self):
+        new_id = self.tracker.add_assignment("DBMS Assignment", "2026-07-25")
+        self._created_ids.append(new_id)
 
+        summary = self.tracker.show_assignments()
+        self.assertIn("DBMS Assignment", summary)
+
+    def test_show_assignments_when_empty(self):
+        summary = self.tracker.show_assignments()
+        self.assertIn("don't have any assignments", summary)
+
+    def test_mark_completed_returns_a_status_message(self):
+        new_id = self.tracker.add_assignment("DBMS Assignment", "2026-07-25")
+        self._created_ids.append(new_id)
+
+        message = self.tracker.mark_completed(new_id)
+        self.assertIn("marked completed", message.lower())
+
+    def test_mark_completed_unknown_id_returns_not_found(self):
+        message = self.tracker.mark_completed(999999)
+        self.assertIn("not found", message.lower())
+
+    def test_remove_assignment_returns_a_status_message(self):
+        new_id = self.tracker.add_assignment("DBMS Assignment", "2026-07-25")
+        message = self.tracker.remove_assignment(new_id)
+        self.assertIn("removed", message.lower())
+        # Not added to self._created_ids — it's already deleted, cleanup would no-op anyway.
 
 if __name__ == "__main__":
     unittest.main()

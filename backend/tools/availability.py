@@ -136,3 +136,18 @@ def print_free_slots(slots):
         print(
             f"{start.strftime('%I:%M %p')}  -  {end.strftime('%I:%M %p')}"
         )
+def format_free_slots(slots):
+    """Same content as print_free_slots, but returns a string instead of
+    printing — used by the chat agent, which needs an actual return value."""
+
+    if not slots:
+        return "You don't have any free slots available."
+
+    lines = ["Available free slots:\n"]
+
+    for start, end in slots:
+        lines.append(
+            f"{start.strftime('%I:%M %p')} – {end.strftime('%I:%M %p')}"
+        )
+
+    return "\n".join(lines)
