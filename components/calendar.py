@@ -1,6 +1,7 @@
 import streamlit as st
+from datetime import time, datetime
 from backend.tools.validation import validate_class_fields
-from backend.calendar_service.schedule_manager import (CLASS_TYPES,add_class,apply_template,classes_for_semester,delete_class,get_color_for_class,list_semesters,load_templates,save_current_as_template,)
+from backend.calendar_service.schedule_manager import (CLASS_TYPES,add_class,apply_template,classes_for_semester,delete_class,get_color_for_class,list_semesters,load_templates,save_current_as_template,update_class,)
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 def render_timetable():
     user_id = st.session_state.user_id
@@ -54,9 +55,17 @@ def render_timetable():
                     """,
                     unsafe_allow_html=True,
                 )
-                if st.button("✕", key=f"del_{c['id']}", help="Delete class"):
-                    delete_class(user_id, c["id"])
-                    st.rerun()
+                edit_col, del_col = st.columns(2)
+                with edit_col:
+                    if st.button("✎", key=f"edit_{c['id']}", help="Edit / move class", use_container_width=True):
+                        st.session_state[f"editing_class_{c['id']}"] = True
+                with del_col:
+                    if st.button("✕", key=f"del_{c['id']}", help="Delete class", use_container_width=True):
+                        delete_class(user_id, c["id"])
+                        st.rerun()
+
+                if st.session_state.get(f"editing_class_{c['id']}"):
+                    _render_edit_class_form(user_id, c)
 
     return sync_clicked
 
@@ -85,6 +94,62 @@ def _render_add_class_form(user_id, semester):
                 st.success("Class added.")
                 st.rerun()
 
+def _parse_time_string(value, fallback=time(9, 0)):
+    if not value:
+        return fallback
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(str(value), fmt).time()
+        except ValueError:
+            continue
+    return fallback
+
+
+def _render_edit_class_form(user_id, class_entry):
+    class_id = class_entry["id"]
+    with st.form(f"edit_class_form_{class_id}"):
+        name = st.text_input("Subject", value=class_entry["name"])
+
+        day_index = DAYS.index(class_entry["day"]) if class_entry["day"] in DAYS else 0
+        day = st.selectbox("Day", DAYS, index=day_index)
+
+        type_index = CLASS_TYPES.index(class_entry.get("type", "Lecture")) if class_entry.get("type") in CLASS_TYPES else 0
+        class_type = st.selectbox("Type", CLASS_TYPES, index=type_index)
+
+        room = st.text_input("Room", value=class_entry.get("room", ""))
+        instructor = st.text_input("Instructor", value=class_entry.get("instructor", ""))
+
+        start, end = st.columns(2)
+        start_time = start.time_input("Start time", value=_parse_time_string(class_entry.get("start_time")))
+        end_time = end.time_input("End time", value=_parse_time_string(class_entry.get("end_time")))
+
+        save_col, cancel_col = st.columns(2)
+        save_clicked = save_col.form_submit_button("Save changes")
+        cancel_clicked = cancel_col.form_submit_button("Cancel")
+
+        if cancel_clicked:
+            st.session_state[f"editing_class_{class_id}"] = False
+            st.rerun()
+
+        if save_clicked:
+            error = validate_class_fields(name, day, start_time, end_time, room, instructor)
+            if error:
+                st.warning(error)
+            else:
+                update_class(
+                    user_id,
+                    class_id,
+                    course_name=name.strip(),
+                    day_of_week=day,
+                    class_type=class_type,
+                    location=room,
+                    instructor=instructor,
+                    start_time=str(start_time),
+                    end_time=str(end_time),
+                )
+                st.session_state[f"editing_class_{class_id}"] = False
+                st.success("Class updated.")
+                st.rerun()
 
 def _render_template_controls(user_id, semester, semesters):
     col1, col2 = st.columns(2)

@@ -68,7 +68,7 @@ Return:
 }}
 
 3. move_class
-Use when the user asks to move an existing class.
+Use when the user asks to move an existing class to a new day and/or time.
 
 Return:
 {{
@@ -78,6 +78,12 @@ Return:
     "new_start_time": null,
     "new_end_time": null
 }}
+move_class rules:
+- class_query must be the class name (or a close match) as the user referred to it
+- new_day must be one of: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, or null if not mentioned
+- new_start_time and new_end_time must be in 24-hour "HH:MM" format (e.g. "14:00"), or null if not mentioned
+- If the user gives only a new time and no new day, new_day must be null
+- If the user gives only a new day and no new time, new_start_time and new_end_time must both be null
 
 4. question
 Use when the user asks a question, explains something, corrects the assistant,

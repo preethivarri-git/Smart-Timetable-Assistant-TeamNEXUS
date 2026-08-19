@@ -1,30 +1,12 @@
-"""
-backend/calendar_service/schedule_manager.py
-
-DB-backed replacement for the old class_schedule.json / semester_templates.json
-version. All functions are scoped by user_id and talk to storage.py instead of
-flat files.
-
-IMPORTANT: callers (e.g. components/calendar.py) still work with the *old*
-JSON-shaped dicts -- keys like "name", "day", "room", "type", "id" -- rather
-than storage.py's column names ("course_name", "day_of_week", "location",
-"class_type"). This module is a translation layer: it fetches from the DB
-using the new column names, then hands back dicts shaped like the old ones,
-so rendering code elsewhere doesn't also need to be rewritten.
-
-Every public function now takes user_id as its first argument. Call sites
-in calendar.py and app.py need to be updated to pass st.session_state.user_id.
-"""
-
 from backend.database import storage
 
 CLASS_TYPES = ["Lecture", "Lab", "Tutorial"]
 
 # Per your brief: Lecture = purple, Lab = orange, Tutorial = green
 TYPE_COLORS = {
-    "Lecture": "#6C63FF",
-    "Lab": "#F59E0B",
-    "Tutorial": "#22C55E",
+    "Lecture": "#6B63FFBD",
+    "Lab": "#F59F0BA7",
+    "Tutorial": "#22C55EB0",
 }
 
 
@@ -72,6 +54,10 @@ def delete_class(user_id, class_id):
     """Deletes a class. Scoped to user_id -- one user can't delete another's class."""
     return storage.delete_class_schedule(class_id, user_id)
 
+def update_class(user_id, class_id, **fields):
+    """Update any subset of a class's editable columns. Scoped to user_id
+    (so one user can't edit another user's class)."""
+    return storage.update_class_schedule(class_id, user_id, **fields)
 
 def get_color_for_class(class_entry):
     """Color is based on class type (Lecture/Lab/Tutorial), per the design brief."""
