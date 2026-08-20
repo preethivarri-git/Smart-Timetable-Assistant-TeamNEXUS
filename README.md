@@ -126,6 +126,7 @@ pip install -r requirements.txt
 ```
 
 Add your Google OAuth credentials as `credentials.json` in the project root, and create a `.env` file:
+
    GEMINI_API_KEY=your_gemini_api_key_here
    EMAIL_ADDRESS=your_sender_email@gmail.com
    EMAIL_PASSWORD=your_app_password
@@ -141,6 +142,6 @@ Sign up for an account, log in, then click **"Connect Google Calendar"** in the 
 
 ## 👨‍💻 Authors
 
-*POOJITHA*, *JAGRUTHI*, *PREETHI*
+POOJITHA, JAGRUTHI, PREETHI
 
-Built as part of the Capabl Shakshyam Internship Programme.
+[Built as part of the Capabl Shakshyam Internship Programme.]
